@@ -20,6 +20,7 @@ dependencies {
     api(project(":spi:common:http-spi"))
     api(project(":spi:data-plane:data-plane-spi"))
     api(project(":spi:data-plane:data-plane-http-spi"))
+    implementation(project(":core:common:connector-core"))
     implementation(project(":core:common:util"))
     implementation(project(":core:data-plane:data-plane-util"))
 
@@ -29,6 +30,7 @@ dependencies {
     testImplementation(libs.restAssured)
     testImplementation(libs.mockserver.netty)
 
+    testImplementation(testFixtures(project(":core:common:lib:http-lib")))
     testImplementation(testFixtures(project(":spi:data-plane:data-plane-spi")))
 }
 

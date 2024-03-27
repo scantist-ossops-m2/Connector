@@ -17,13 +17,16 @@ package org.eclipse.edc.connector;
 import org.eclipse.edc.connector.contract.spi.negotiation.store.ContractNegotiationStore;
 import org.eclipse.edc.connector.contract.spi.offer.store.ContractDefinitionStore;
 import org.eclipse.edc.connector.defaults.callback.CallbackRegistryImpl;
+import org.eclipse.edc.connector.defaults.protocol.ProtocolVersionRegistryImpl;
 import org.eclipse.edc.connector.defaults.storage.assetindex.InMemoryAssetIndex;
 import org.eclipse.edc.connector.defaults.storage.contractdefinition.InMemoryContractDefinitionStore;
 import org.eclipse.edc.connector.defaults.storage.contractnegotiation.InMemoryContractNegotiationStore;
 import org.eclipse.edc.connector.defaults.storage.policydefinition.InMemoryPolicyDefinitionStore;
 import org.eclipse.edc.connector.defaults.storage.transferprocess.InMemoryTransferProcessStore;
 import org.eclipse.edc.connector.policy.spi.store.PolicyDefinitionStore;
+import org.eclipse.edc.connector.query.asset.AssetPropertyLookup;
 import org.eclipse.edc.connector.spi.callback.CallbackRegistry;
+import org.eclipse.edc.connector.spi.protocol.ProtocolVersionRegistry;
 import org.eclipse.edc.connector.transfer.spi.store.TransferProcessStore;
 import org.eclipse.edc.runtime.metamodel.annotation.Extension;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
@@ -32,6 +35,7 @@ import org.eclipse.edc.spi.asset.AssetIndex;
 import org.eclipse.edc.spi.asset.DataAddressResolver;
 import org.eclipse.edc.spi.query.CriterionOperatorRegistry;
 import org.eclipse.edc.spi.system.ServiceExtension;
+import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.util.concurrency.LockManager;
 
 import java.time.Clock;
@@ -57,6 +61,11 @@ public class ControlPlaneDefaultServicesExtension implements ServiceExtension {
 
     @Inject
     private CriterionOperatorRegistry criterionOperatorRegistry;
+
+    @Override
+    public void initialize(ServiceExtensionContext context) {
+        criterionOperatorRegistry.registerPropertyLookup(new AssetPropertyLookup());
+    }
 
     @Provider(isDefault = true)
     public AssetIndex defaultAssetIndex() {
@@ -91,6 +100,11 @@ public class ControlPlaneDefaultServicesExtension implements ServiceExtension {
     @Provider(isDefault = true)
     public CallbackRegistry defaultCallbackRegistry() {
         return new CallbackRegistryImpl();
+    }
+
+    @Provider(isDefault = true)
+    public ProtocolVersionRegistry protocolVersionRegistry() {
+        return new ProtocolVersionRegistryImpl();
     }
 
     private ContractDefinitionStore getContractDefinitionStore() {

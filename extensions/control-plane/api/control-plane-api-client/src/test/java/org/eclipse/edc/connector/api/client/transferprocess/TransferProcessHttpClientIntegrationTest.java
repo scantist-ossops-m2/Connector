@@ -23,7 +23,6 @@ import org.eclipse.edc.connector.transfer.spi.callback.ControlApiUrl;
 import org.eclipse.edc.connector.transfer.spi.flow.DataFlowController;
 import org.eclipse.edc.connector.transfer.spi.flow.DataFlowManager;
 import org.eclipse.edc.connector.transfer.spi.store.TransferProcessStore;
-import org.eclipse.edc.connector.transfer.spi.types.DataRequest;
 import org.eclipse.edc.connector.transfer.spi.types.TransferProcess;
 import org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates;
 import org.eclipse.edc.junit.annotations.ComponentTest;
@@ -39,7 +38,8 @@ import org.eclipse.edc.spi.response.StatusResult;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.types.domain.DataAddress;
-import org.eclipse.edc.spi.types.domain.transfer.DataFlowRequest;
+import org.eclipse.edc.spi.types.domain.transfer.DataFlowStartMessage;
+import org.eclipse.edc.spi.types.domain.transfer.FlowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,7 +55,7 @@ import static org.assertj.core.api.InstanceOfAssertFactories.INTEGER;
 import static org.awaitility.Awaitility.await;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.COMPLETED;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.TERMINATED;
-import static org.eclipse.edc.junit.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.edc.util.io.Ports.getFreePort;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -100,7 +100,7 @@ public class TransferProcessHttpClientIntegrationTest {
         store.save(createTransferProcess(id));
         var dataFlowRequest = createDataFlowRequest(id, callbackUrl.get());
 
-        manager.initiate(dataFlowRequest);
+        manager.start(dataFlowRequest);
 
         await().untilAsserted(() -> {
             var transferProcess = store.findById("tp-id");
@@ -116,7 +116,7 @@ public class TransferProcessHttpClientIntegrationTest {
         store.save(createTransferProcess(id));
         var dataFlowRequest = createDataFlowRequest(id, callbackUrl.get());
 
-        manager.initiate(dataFlowRequest);
+        manager.start(dataFlowRequest);
 
         await().untilAsserted(() -> {
             var transferProcess = store.findById("tp-id");
@@ -134,7 +134,7 @@ public class TransferProcessHttpClientIntegrationTest {
         store.save(createTransferProcess(id));
         var dataFlowRequest = createDataFlowRequest(id, callbackUrl.get());
 
-        manager.initiate(dataFlowRequest);
+        manager.start(dataFlowRequest);
 
         await().untilAsserted(() -> {
             var transferProcess = store.findById("tp-id");
@@ -150,22 +150,21 @@ public class TransferProcessHttpClientIntegrationTest {
                 .id(id)
                 .state(TransferProcessStates.STARTED.code())
                 .type(TransferProcess.Type.PROVIDER)
-                .dataRequest(DataRequest.Builder.newInstance()
-                        .id(UUID.randomUUID().toString())
-                        .destinationType("file")
-                        .protocol("any")
-                        .connectorAddress("http://an/address")
-                        .build())
+                .correlationId(UUID.randomUUID().toString())
+                .dataDestination(DataAddress.Builder.newInstance().type("file").build())
+                .protocol("any")
+                .counterPartyAddress("http://an/address")
                 .build();
     }
 
-    private DataFlowRequest createDataFlowRequest(String processId, URI callbackAddress) {
-        return DataFlowRequest.Builder.newInstance()
+    private DataFlowStartMessage createDataFlowRequest(String processId, URI callbackAddress) {
+        return DataFlowStartMessage.Builder.newInstance()
                 .id(UUID.randomUUID().toString())
                 .processId(processId)
                 .callbackAddress(callbackAddress)
                 .sourceDataAddress(DataAddress.Builder.newInstance().type("file").build())
                 .destinationDataAddress(DataAddress.Builder.newInstance().type("file").build())
+                .flowType(FlowType.PUSH)
                 .build();
     }
 

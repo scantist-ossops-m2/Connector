@@ -57,6 +57,8 @@ import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.PROVISIONING_REQUESTED;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.REQUESTED;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.REQUESTING;
+import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.RESUMED;
+import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.RESUMING;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.STARTED;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.STARTING;
 import static org.eclipse.edc.connector.transfer.spi.types.TransferProcessStates.SUSPENDED;
@@ -121,7 +123,12 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
     public static final String TRANSFER_PROCESS_DATA_DESTINATION = EDC_NAMESPACE + "dataDestination";
     public static final String TRANSFER_PROCESS_CALLBACK_ADDRESSES = EDC_NAMESPACE + "callbackAddresses";
     private Type type = CONSUMER;
-    private DataRequest dataRequest;
+    private String protocol;
+    private String correlationId;
+    private String counterPartyAddress;
+    private DataAddress dataDestination;
+    private String assetId;
+    private String contractId;
     private DataAddress contentDataAddress;
     private ResourceManifest resourceManifest;
     private ProvisionedResourceSet provisionedResourceSet = ProvisionedResourceSet.Builder.newInstance().build();
@@ -131,6 +138,7 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
     private ProtocolMessages protocolMessages = new ProtocolMessages();
 
     private String transferType;
+    private String dataPlaneId;
 
     private TransferProcess() {
     }
@@ -141,10 +149,6 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
 
     public Type getType() {
         return type;
-    }
-
-    public DataRequest getDataRequest() {
-        return dataRequest;
     }
 
     public ResourceManifest getResourceManifest() {
@@ -280,22 +284,23 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
     }
 
     public void transitionStarting() {
-        if (type == CONSUMER) {
-            throw new IllegalStateException("Consumer processes have no STARTING state");
-        }
-
-        transition(STARTING, PROVISIONED, STARTING);
+        transition(STARTING, PROVISIONED, STARTING, SUSPENDED);
     }
 
     public boolean canBeStartedConsumer() {
-        return currentStateIsOneOf(STARTED, REQUESTED);
+        return currentStateIsOneOf(STARTED, REQUESTED, STARTING, RESUMED);
     }
 
     public void transitionStarted() {
+        transitionStarted(null);
+    }
+
+    public void transitionStarted(String dataPlaneId) {
         if (type == CONSUMER) {
             transition(STARTED, state -> canBeStartedConsumer());
         } else {
-            transition(STARTED, STARTED, STARTING);
+            this.dataPlaneId = dataPlaneId;
+            transition(STARTED, STARTED, STARTING, SUSPENDED, RESUMING);
         }
     }
 
@@ -333,7 +338,8 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
     }
 
     public boolean canBeTerminated() {
-        return currentStateIsOneOf(INITIAL, PROVISIONING, PROVISIONING_REQUESTED, PROVISIONED, REQUESTING, REQUESTED, STARTING, STARTED, COMPLETING, SUSPENDING, SUSPENDED, TERMINATING);
+        return currentStateIsOneOf(INITIAL, PROVISIONING, PROVISIONING_REQUESTED, PROVISIONED, REQUESTING, REQUESTED,
+                STARTING, STARTED, COMPLETING, SUSPENDING, SUSPENDED, RESUMING, TERMINATING);
     }
 
     public void transitionTerminating(@Nullable String errorDetail) {
@@ -354,13 +360,49 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
         transition(TERMINATED, state -> canBeTerminated());
     }
 
+    public boolean canBeSuspended() {
+        return currentStateIsOneOf(STARTED, SUSPENDING);
+    }
+
+    public void transitionSuspending(String reason) {
+        this.errorDetail = reason;
+        transition(SUSPENDING, state -> canBeSuspended());
+    }
+
+    public void transitionSuspended(String reason) {
+        this.errorDetail = reason;
+        transitionSuspended();
+    }
+
+    public void transitionResumed() {
+        transition(RESUMED, state -> currentStateIsOneOf(RESUMING));
+    }
+
+    public void transitionResuming() {
+        transition(RESUMING, state -> true);
+    }
+
+    public void transitionSuspended() {
+        transition(SUSPENDED, state -> canBeSuspended());
+    }
+
     public boolean currentStateIsOneOf(TransferProcessStates... states) {
         return Arrays.stream(states).map(TransferProcessStates::code).anyMatch(code -> code == state);
     }
 
     @JsonIgnore
     public String getCorrelationId() {
-        return dataRequest.getId();
+        return correlationId;
+    }
+
+    /**
+     * Set the correlationId, operation that's needed on the consumer side when it receives the first message with the
+     * provider process id.
+     *
+     * @param correlationId the correlation id.
+     */
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
     }
 
     @JsonIgnore
@@ -369,10 +411,9 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
     }
 
     @JsonIgnore
-    public String getConnectorAddress() {
-        return dataRequest.getConnectorAddress();
+    public String getCounterPartyAddress() {
+        return counterPartyAddress;
     }
-
 
     /**
      * The transfer type to use for the requested data
@@ -384,39 +425,48 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
 
     @JsonIgnore
     public String getAssetId() {
-        return dataRequest.getAssetId();
+        return assetId;
     }
 
     @JsonIgnore
     public String getContractId() {
-        return dataRequest.getContractId();
+        return contractId;
     }
 
     @JsonIgnore
     public DataAddress getDataDestination() {
-        return dataRequest.getDataDestination();
+        return dataDestination;
     }
 
     @JsonIgnore
     public String getProtocol() {
-        return dataRequest.getProtocol();
+        return protocol;
     }
 
     @JsonIgnore
     public void updateDestination(DataAddress dataAddress) {
-        dataRequest.updateDestination(dataAddress);
+        this.dataDestination = dataAddress;
     }
 
     @JsonIgnore
     public String getDestinationType() {
-        return dataRequest.getDestinationType();
+        return dataDestination.getType();
+    }
+
+    public String getDataPlaneId() {
+        return dataPlaneId;
     }
 
     @Override
     public TransferProcess copy() {
         var builder = Builder.newInstance()
                 .resourceManifest(resourceManifest)
-                .dataRequest(dataRequest)
+                .protocol(protocol)
+                .correlationId(correlationId)
+                .counterPartyAddress(counterPartyAddress)
+                .dataDestination(dataDestination)
+                .assetId(assetId)
+                .contractId(contractId)
                 .provisionedResourceSet(provisionedResourceSet)
                 .contentDataAddress(contentDataAddress)
                 .deprovisionedResources(deprovisionedResources)
@@ -424,7 +474,8 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
                 .callbackAddresses(callbackAddresses)
                 .transferType(transferType)
                 .type(type)
-                .protocolMessages(protocolMessages);
+                .protocolMessages(protocolMessages)
+                .dataPlaneId(dataPlaneId);
         return copy(builder);
     }
 
@@ -487,16 +538,6 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
         transitionTo(targetState);
     }
 
-    /**
-     * Set the correlationId, operation that's needed on the consumer side when it receives the first message with the
-     * provider process id.
-     *
-     * @param correlationId the correlation id.
-     */
-    public void setCorrelationId(String correlationId) {
-        dataRequest.setId(correlationId);
-    }
-
     public enum Type {
         CONSUMER, PROVIDER
     }
@@ -515,11 +556,6 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
 
         public Builder type(Type type) {
             entity.type = type;
-            return this;
-        }
-
-        public Builder dataRequest(DataRequest request) {
-            entity.dataRequest = request;
             return this;
         }
 
@@ -563,6 +599,41 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
             return this;
         }
 
+        public Builder dataPlaneId(String dataPlaneId) {
+            entity.dataPlaneId = dataPlaneId;
+            return this;
+        }
+
+        public Builder protocol(String protocol) {
+            entity.protocol = protocol;
+            return this;
+        }
+
+        public Builder correlationId(String correlationId) {
+            entity.correlationId = correlationId;
+            return this;
+        }
+
+        public Builder counterPartyAddress(String counterPartyAddress) {
+            entity.counterPartyAddress = counterPartyAddress;
+            return this;
+        }
+
+        public Builder dataDestination(DataAddress dataDestination) {
+            entity.dataDestination = dataDestination;
+            return this;
+        }
+
+        public Builder assetId(String assetId) {
+            entity.assetId = assetId;
+            return this;
+        }
+
+        public Builder contractId(String contractId) {
+            entity.contractId = contractId;
+            return this;
+        }
+
         @Override
         public Builder self() {
             return this;
@@ -571,12 +642,6 @@ public class TransferProcess extends StatefulEntity<TransferProcess> {
         @Override
         public TransferProcess build() {
             super.build();
-
-            if (entity.dataRequest == null) {
-                entity.dataRequest = DataRequest.Builder.newInstance().destinationType("type").build();
-            }
-
-            entity.dataRequest.associateWithProcessId(entity.id);
 
             if (entity.resourceManifest != null) {
                 entity.resourceManifest.setTransferProcessId(entity.id);

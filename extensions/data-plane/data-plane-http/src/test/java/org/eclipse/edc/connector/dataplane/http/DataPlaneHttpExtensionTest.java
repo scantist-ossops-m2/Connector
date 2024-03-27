@@ -19,7 +19,7 @@ import org.eclipse.edc.connector.dataplane.http.spi.HttpRequestParamsProvider;
 import org.eclipse.edc.connector.dataplane.spi.pipeline.PipelineService;
 import org.eclipse.edc.connector.dataplane.spi.pipeline.StreamResult;
 import org.eclipse.edc.junit.extensions.EdcExtension;
-import org.eclipse.edc.spi.types.domain.transfer.DataFlowRequest;
+import org.eclipse.edc.spi.types.domain.transfer.DataFlowStartMessage;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ import java.util.UUID;
 import static java.util.Collections.emptyMap;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.edc.junit.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.edc.util.io.Ports.getFreePort;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.stop.Stop.stopQuietly;
@@ -68,7 +68,7 @@ public class DataPlaneHttpExtensionTest {
         sourceServer.when(request()).respond(HttpResponse.response().withStatusCode(200));
         destinationServer.when(request()).respond(HttpResponse.response().withStatusCode(200));
 
-        var request = DataFlowRequest.Builder.newInstance()
+        var request = DataFlowStartMessage.Builder.newInstance()
                 .processId(UUID.randomUUID().toString())
                 .sourceDataAddress(source)
                 .destinationDataAddress(destination)
@@ -96,7 +96,7 @@ public class DataPlaneHttpExtensionTest {
         sourceServer.when(request()).respond(HttpResponse.response().withStatusCode(200));
         destinationServer.when(request()).respond(HttpResponse.response().withStatusCode(200));
 
-        var request = DataFlowRequest.Builder.newInstance()
+        var request = DataFlowStartMessage.Builder.newInstance()
                 .processId(UUID.randomUUID().toString())
                 .sourceDataAddress(source)
                 .destinationDataAddress(destination)

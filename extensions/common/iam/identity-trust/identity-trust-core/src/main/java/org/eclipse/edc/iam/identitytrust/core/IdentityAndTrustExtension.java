@@ -14,7 +14,6 @@
 
 package org.eclipse.edc.iam.identitytrust.core;
 
-import com.nimbusds.jwt.JWTClaimNames;
 import jakarta.json.Json;
 import org.eclipse.edc.iam.did.spi.resolution.DidPublicKeyResolver;
 import org.eclipse.edc.iam.did.spi.resolution.DidResolverRegistry;
@@ -22,7 +21,9 @@ import org.eclipse.edc.iam.identitytrust.DidCredentialServiceUrlResolver;
 import org.eclipse.edc.iam.identitytrust.IdentityAndTrustService;
 import org.eclipse.edc.iam.identitytrust.core.defaults.DefaultCredentialServiceClient;
 import org.eclipse.edc.iam.identitytrust.verification.MultiFormatPresentationVerifier;
+import org.eclipse.edc.identitytrust.ClaimTokenCreatorFunction;
 import org.eclipse.edc.identitytrust.CredentialServiceClient;
+import org.eclipse.edc.identitytrust.IatpParticipantAgentServiceExtension;
 import org.eclipse.edc.identitytrust.SecureTokenService;
 import org.eclipse.edc.identitytrust.TrustedIssuerRegistry;
 import org.eclipse.edc.identitytrust.validation.TokenValidationAction;
@@ -34,32 +35,32 @@ import org.eclipse.edc.runtime.metamodel.annotation.Inject;
 import org.eclipse.edc.runtime.metamodel.annotation.Provider;
 import org.eclipse.edc.runtime.metamodel.annotation.Setting;
 import org.eclipse.edc.security.signature.jws2020.JwsSignature2020Suite;
+import org.eclipse.edc.spi.agent.ParticipantAgentService;
 import org.eclipse.edc.spi.http.EdcHttpClient;
 import org.eclipse.edc.spi.iam.IdentityService;
-import org.eclipse.edc.spi.result.Result;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.types.TypeManager;
 import org.eclipse.edc.token.rules.AudienceValidationRule;
 import org.eclipse.edc.token.rules.ExpirationIssuedAtValidationRule;
-import org.eclipse.edc.token.rules.NotBeforeValidationRule;
 import org.eclipse.edc.token.spi.TokenValidationRulesRegistry;
 import org.eclipse.edc.token.spi.TokenValidationService;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.eclipse.edc.verifiablecredentials.jwt.JwtPresentationVerifier;
-import org.eclipse.edc.verifiablecredentials.jwt.rules.AccessTokenNotNullRule;
+import org.eclipse.edc.verifiablecredentials.jwt.rules.HasSubjectRule;
 import org.eclipse.edc.verifiablecredentials.jwt.rules.IssuerEqualsSubjectRule;
 import org.eclipse.edc.verifiablecredentials.jwt.rules.JtiValidationRule;
 import org.eclipse.edc.verifiablecredentials.jwt.rules.SubJwkIsNullRule;
+import org.eclipse.edc.verifiablecredentials.jwt.rules.TokenNotNullRule;
 import org.eclipse.edc.verifiablecredentials.linkeddata.DidMethodResolver;
 import org.eclipse.edc.verifiablecredentials.linkeddata.LdpVerifier;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Clock;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.eclipse.edc.spi.CoreConstants.JSON_LD;
+import static org.eclipse.edc.verifiablecredentials.jwt.JwtPresentationVerifier.JWT_VC_TOKEN_CONTEXT;
 
 @Extension("Identity And Trust Extension")
 public class IdentityAndTrustExtension implements ServiceExtension {
@@ -105,6 +106,14 @@ public class IdentityAndTrustExtension implements ServiceExtension {
     private TokenValidationRulesRegistry rulesRegistry;
     @Inject
     private DidPublicKeyResolver didPublicKeyResolver;
+    @Inject
+    private ClaimTokenCreatorFunction claimTokenFunction;
+
+    @Inject
+    private ParticipantAgentService participantAgentService;
+
+    @Inject
+    private IatpParticipantAgentServiceExtension participantAgentServiceExtension;
 
     private PresentationVerifier presentationVerifier;
     private CredentialServiceClient credentialServiceClient;
@@ -116,21 +125,18 @@ public class IdentityAndTrustExtension implements ServiceExtension {
         rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new IssuerEqualsSubjectRule());
         rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new SubJwkIsNullRule());
         rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new AudienceValidationRule(getOwnDid(context)));
-        rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new JtiValidationRule(context.getMonitor()));
+        context.getMonitor().warning("The JTI Validation rule is not yet implemented as it depends on https://github.com/eclipse-edc/Connector/issues/3749.");
+        rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new JtiValidationRule());
         rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new ExpirationIssuedAtValidationRule(clock, 5));
-        rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new NotBeforeValidationRule(clock, 5));
-        rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new AccessTokenNotNullRule());
+        rulesRegistry.addRule(IATP_SELF_ISSUED_TOKEN_CONTEXT, new TokenNotNullRule());
 
         // add all rules for validating VerifiableCredential JWTs
-        rulesRegistry.addRule("iatp-vc", (toVerify, additional) -> Optional.ofNullable(toVerify.getStringClaim(JWTClaimNames.SUBJECT)).map(s ->
-                Result.success()).orElseGet(() -> Result.failure("Token could not be verified: Claim verification failed. JWT missing required claims: [sub]")).mapTo());
-
-        rulesRegistry.addRule("iatp-vp", (toVerify, additional) -> Optional.ofNullable(toVerify.getStringClaim(JWTClaimNames.SUBJECT)).map(s ->
-                Result.success()).orElseGet(() -> Result.failure("Token could not be verified: Claim verification failed. JWT missing required claims: [sub]")).mapTo());
-
+        rulesRegistry.addRule(JWT_VC_TOKEN_CONTEXT, new HasSubjectRule());
 
         // TODO move in a separated extension?
         signatureSuiteRegistry.register(JSON_2020_SIGNATURE_SUITE, new JwsSignature2020Suite(typeManager.getMapper(JSON_LD)));
+
+        participantAgentService.register(participantAgentServiceExtension);
     }
 
     @Provider
@@ -141,7 +147,7 @@ public class IdentityAndTrustExtension implements ServiceExtension {
         var validationAction = tokenValidationAction();
 
         return new IdentityAndTrustService(secureTokenService, getOwnDid(context), getPresentationVerifier(context),
-                getCredentialServiceClient(context), validationAction, registry, clock, credentialServiceUrlResolver);
+                getCredentialServiceClient(context), validationAction, registry, clock, credentialServiceUrlResolver, claimTokenFunction);
     }
 
     @Provider

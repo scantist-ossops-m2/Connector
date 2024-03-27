@@ -16,19 +16,19 @@ package org.eclipse.edc.iam.identitytrust.sts.core.defaults;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.SignedJWT;
-import org.eclipse.edc.connector.core.security.KeyParserRegistryImpl;
-import org.eclipse.edc.connector.core.security.keyparsers.JwkParser;
-import org.eclipse.edc.connector.core.security.keyparsers.PemParser;
-import org.eclipse.edc.connector.core.vault.InMemoryVault;
+import org.eclipse.edc.boot.vault.InMemoryVault;
 import org.eclipse.edc.iam.identitytrust.sts.core.defaults.service.StsClientServiceImpl;
 import org.eclipse.edc.iam.identitytrust.sts.core.defaults.service.StsClientTokenGeneratorServiceImpl;
 import org.eclipse.edc.iam.identitytrust.sts.core.defaults.store.InMemoryStsClientStore;
 import org.eclipse.edc.iam.identitytrust.sts.model.StsClientTokenAdditionalParams;
 import org.eclipse.edc.junit.annotations.ComponentTest;
-import org.eclipse.edc.spi.security.KeyParserRegistry;
-import org.eclipse.edc.spi.security.PrivateKeyResolver;
+import org.eclipse.edc.keys.KeyParserRegistryImpl;
+import org.eclipse.edc.keys.VaultPrivateKeyResolver;
+import org.eclipse.edc.keys.keyparsers.JwkParser;
+import org.eclipse.edc.keys.keyparsers.PemParser;
+import org.eclipse.edc.keys.spi.KeyParserRegistry;
+import org.eclipse.edc.keys.spi.PrivateKeyResolver;
 import org.eclipse.edc.spi.security.Vault;
-import org.eclipse.edc.spi.security.VaultPrivateKeyResolver;
 import org.eclipse.edc.token.JwtGenerationService;
 import org.eclipse.edc.transaction.spi.NoopTransactionContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +47,7 @@ import static com.nimbusds.jwt.JWTClaimNames.JWT_ID;
 import static com.nimbusds.jwt.JWTClaimNames.SUBJECT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.edc.iam.identitytrust.sts.store.fixtures.TestFunctions.createClientBuilder;
-import static org.eclipse.edc.identitytrust.SelfIssuedTokenConstants.PRESENTATION_ACCESS_TOKEN_CLAIM;
+import static org.eclipse.edc.identitytrust.SelfIssuedTokenConstants.PRESENTATION_TOKEN_CLAIM;
 import static org.eclipse.edc.jwt.spi.JwtRegisteredClaimNames.CLIENT_ID;
 import static org.mockito.Mockito.mock;
 
@@ -142,7 +142,7 @@ public class StsClientTokenIssuanceIntegrationTest {
                 .containsEntry(ISSUER, did)
                 .containsEntry(SUBJECT, did)
                 .containsEntry(AUDIENCE, List.of(audience))
-                .containsKeys(JWT_ID, EXPIRATION_TIME, ISSUED_AT, "access_token")
+                .containsKeys(JWT_ID, EXPIRATION_TIME, ISSUED_AT, PRESENTATION_TOKEN_CLAIM)
                 .doesNotContainKey(CLIENT_ID);
 
     }
@@ -179,7 +179,7 @@ public class StsClientTokenIssuanceIntegrationTest {
                 .containsEntry(ISSUER, did)
                 .containsEntry(SUBJECT, did)
                 .containsEntry(AUDIENCE, List.of(audience))
-                .containsEntry(PRESENTATION_ACCESS_TOKEN_CLAIM, accessToken)
+                .containsEntry(PRESENTATION_TOKEN_CLAIM, accessToken)
                 .containsKeys(JWT_ID, EXPIRATION_TIME, ISSUED_AT)
                 .doesNotContainKey(CLIENT_ID);
 

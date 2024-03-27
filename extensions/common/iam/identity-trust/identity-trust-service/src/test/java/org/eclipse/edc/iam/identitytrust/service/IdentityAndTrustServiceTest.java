@@ -25,6 +25,7 @@ import org.eclipse.edc.identitytrust.TrustedIssuerRegistry;
 import org.eclipse.edc.identitytrust.model.CredentialFormat;
 import org.eclipse.edc.identitytrust.model.CredentialSubject;
 import org.eclipse.edc.identitytrust.model.Issuer;
+import org.eclipse.edc.identitytrust.model.VerifiableCredential;
 import org.eclipse.edc.identitytrust.model.VerifiablePresentationContainer;
 import org.eclipse.edc.identitytrust.validation.TokenValidationAction;
 import org.eclipse.edc.identitytrust.verification.PresentationVerifier;
@@ -50,7 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.eclipse.edc.identitytrust.SelfIssuedTokenConstants.PRESENTATION_ACCESS_TOKEN_CLAIM;
+import static org.eclipse.edc.identitytrust.SelfIssuedTokenConstants.PRESENTATION_TOKEN_CLAIM;
 import static org.eclipse.edc.identitytrust.TestFunctions.TRUSTED_ISSUER;
 import static org.eclipse.edc.identitytrust.TestFunctions.createCredentialBuilder;
 import static org.eclipse.edc.identitytrust.TestFunctions.createJwt;
@@ -80,7 +81,7 @@ class IdentityAndTrustServiceTest {
     private final CredentialServiceUrlResolver credentialServiceUrlResolverMock = mock();
     private final TokenValidationAction actionMock = mock();
     private final IdentityAndTrustService service = new IdentityAndTrustService(mockedSts, EXPECTED_OWN_DID, mockedVerifier, mockedClient,
-            actionMock, trustedIssuerRegistryMock, Clock.systemUTC(), credentialServiceUrlResolverMock);
+            actionMock, trustedIssuerRegistryMock, Clock.systemUTC(), credentialServiceUrlResolverMock, vcs -> Result.success(ClaimToken.Builder.newInstance().claim("vc", vcs).build()));
 
     @BeforeEach
     void setup() {
@@ -89,7 +90,7 @@ class IdentityAndTrustServiceTest {
 
         when(actionMock.apply(any())).thenReturn(success(ClaimToken.Builder.newInstance()
                 .claim("iss", CONSUMER_DID)
-                .claim(PRESENTATION_ACCESS_TOKEN_CLAIM, jwt.getToken()).build()));
+                .claim(PRESENTATION_TOKEN_CLAIM, jwt.getToken()).build()));
 
         when(mockedSts.createToken(any(), any())).thenReturn(success(TokenRepresentation.Builder.newInstance().build()));
     }
@@ -149,6 +150,7 @@ class IdentityAndTrustServiceTest {
     }
 
 
+    @SuppressWarnings("unchecked")
     @Nested
     class VerifyJwtToken {
 
@@ -286,7 +288,11 @@ class IdentityAndTrustServiceTest {
             var token = createJwt(CONSUMER_DID, EXPECTED_OWN_DID);
             var result = service.verifyJwtToken(token, verificationContext());
             assertThat(result).isSucceeded()
-                    .satisfies(ct -> Assertions.assertThat(ct.getClaims()).containsEntry("some-claim", "some-val"));
+                    .satisfies(ct -> {
+                        var vc = (List<VerifiableCredential>) ct.getListClaim("vc");
+                        Assertions.assertThat(vc).hasSize(1);
+                        Assertions.assertThat(vc.get(0).getCredentialSubject().get(0).getClaims()).containsEntry("some-claim", "some-val");
+                    });
         }
 
         @Test
@@ -313,9 +319,12 @@ class IdentityAndTrustServiceTest {
             var token = createJwt(CONSUMER_DID, EXPECTED_OWN_DID);
             var result = service.verifyJwtToken(token, verificationContext());
             assertThat(result).isSucceeded()
-                    .satisfies(ct -> Assertions.assertThat(ct.getClaims())
-                            .containsEntry("some-claim", "some-val")
-                            .containsEntry("some-other-claim", "some-other-val"));
+                    .satisfies(ct -> {
+                        var credentials = (List<VerifiableCredential>) ct.getClaims().get("vc");
+                        Assertions.assertThat(credentials).hasSize(2);
+                        Assertions.assertThat(credentials.get(0).getCredentialSubject().get(0).getClaims()).containsEntry("some-claim", "some-val");
+                        Assertions.assertThat(credentials.get(1).getCredentialSubject().get(0).getClaims()).containsEntry("some-other-claim", "some-other-val");
+                    });
         }
 
         @Test
@@ -362,11 +371,14 @@ class IdentityAndTrustServiceTest {
             var token = createJwt(CONSUMER_DID, EXPECTED_OWN_DID);
             var result = service.verifyJwtToken(token, verificationContext());
             assertThat(result).isSucceeded()
-                    .satisfies(ct -> Assertions.assertThat(ct.getClaims())
-                            .containsEntry("some-claim", "some-val")
-                            .containsEntry("some-other-claim", "some-other-val")
-                            .containsEntry("some-claim-2", "some-val-2")
-                            .containsEntry("some-other-claim-2", "some-other-val-2"));
+                    .satisfies(ct -> {
+                        var credentials = (List<VerifiableCredential>) ct.getListClaim("vc");
+                        Assertions.assertThat(credentials).hasSize(4);
+                        Assertions.assertThat(credentials).anySatisfy(vc -> Assertions.assertThat(vc.getCredentialSubject().get(0).getClaims()).containsEntry("some-claim", "some-val"));
+                        Assertions.assertThat(credentials).anySatisfy(vc -> Assertions.assertThat(vc.getCredentialSubject().get(0).getClaims()).containsEntry("some-other-claim", "some-other-val"));
+                        Assertions.assertThat(credentials).anySatisfy(vc -> Assertions.assertThat(vc.getCredentialSubject().get(0).getClaims()).containsEntry("some-claim-2", "some-val-2"));
+                        Assertions.assertThat(credentials).anySatisfy(vc -> Assertions.assertThat(vc.getCredentialSubject().get(0).getClaims()).containsEntry("some-other-claim-2", "some-other-val-2"));
+                    });
         }
     }
 }

@@ -35,7 +35,7 @@ import java.util.Arrays;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.eclipse.edc.junit.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.edc.util.io.Ports.getFreePort;
 import static org.hamcrest.CoreMatchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -231,7 +231,7 @@ public class JerseyRestServiceTest {
         var config = new JettyConfiguration(null, null);
         Arrays.stream(mapping).forEach(config::portMapping);
         jettyService = new JettyService(config, monitor);
-        jerseyRestService = new JerseyRestService(jettyService, new TypeManager(), JerseyConfiguration.none(), monitor);
+        jerseyRestService = new JerseyRestService(jettyService, new TypeManager(), JerseyConfiguration.Builder.newInstance().build(), monitor);
         jettyService.start();
     }
 

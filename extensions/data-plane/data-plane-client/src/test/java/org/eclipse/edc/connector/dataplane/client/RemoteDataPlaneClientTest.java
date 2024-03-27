@@ -22,7 +22,7 @@ import org.eclipse.edc.connector.dataplane.spi.response.TransferErrorResponse;
 import org.eclipse.edc.spi.response.ResponseStatus;
 import org.eclipse.edc.spi.types.TypeManager;
 import org.eclipse.edc.spi.types.domain.DataAddress;
-import org.eclipse.edc.spi.types.domain.transfer.DataFlowRequest;
+import org.eclipse.edc.spi.types.domain.transfer.DataFlowStartMessage;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -40,8 +40,8 @@ import java.util.UUID;
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.edc.junit.assertions.AbstractResultAssert.assertThat;
-import static org.eclipse.edc.junit.testfixtures.TestUtils.getFreePort;
-import static org.eclipse.edc.junit.testfixtures.TestUtils.testHttpClient;
+import static org.eclipse.edc.util.io.Ports.getFreePort;
+import static org.eclipse.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
 import static org.mockserver.matchers.Times.once;
 import static org.mockserver.model.HttpResponse.response;
@@ -70,6 +70,20 @@ class RemoteDataPlaneClientTest {
         stopQuietly(dataPlane);
     }
 
+    private static HttpResponse withResponse(String errorMsg) throws JsonProcessingException {
+        return response().withStatusCode(HttpStatusCode.BAD_REQUEST_400.code())
+                .withBody(MAPPER.writeValueAsString(new TransferErrorResponse(List.of(errorMsg))), MediaType.APPLICATION_JSON);
+    }
+
+    private static DataFlowStartMessage createDataFlowRequest() {
+        return DataFlowStartMessage.Builder.newInstance()
+                .id("123")
+                .processId("456")
+                .sourceDataAddress(DataAddress.Builder.newInstance().type("test").build())
+                .destinationDataAddress(DataAddress.Builder.newInstance().type("test").build())
+                .build();
+    }
+
     @AfterEach
     public void resetMockServer() {
         dataPlane.reset();
@@ -82,7 +96,7 @@ class RemoteDataPlaneClientTest {
         var httpRequest = new HttpRequest().withPath(DATA_PLANE_PATH).withBody(MAPPER.writeValueAsString(flowRequest));
         dataPlane.when(httpRequest, once()).respond(response().withStatusCode(HttpStatusCode.BAD_REQUEST_400.code()));
 
-        var result = dataPlaneClient.transfer(flowRequest);
+        var result = dataPlaneClient.start(flowRequest);
 
         dataPlane.verify(httpRequest, VerificationTimes.once());
 
@@ -102,7 +116,7 @@ class RemoteDataPlaneClientTest {
         var errorMsg = UUID.randomUUID().toString();
         dataPlane.when(httpRequest, once()).respond(withResponse(errorMsg));
 
-        var result = dataPlaneClient.transfer(flowRequest);
+        var result = dataPlaneClient.start(flowRequest);
 
         dataPlane.verify(httpRequest, VerificationTimes.once());
 
@@ -121,7 +135,7 @@ class RemoteDataPlaneClientTest {
         var httpRequest = new HttpRequest().withPath(DATA_PLANE_PATH).withBody(MAPPER.writeValueAsString(flowRequest));
         dataPlane.when(httpRequest, once()).respond(response().withStatusCode(HttpStatusCode.OK_200.code()));
 
-        var result = dataPlaneClient.transfer(flowRequest);
+        var result = dataPlaneClient.start(flowRequest);
 
         dataPlane.verify(httpRequest, VerificationTimes.once());
 
@@ -147,20 +161,5 @@ class RemoteDataPlaneClientTest {
         var result = dataPlaneClient.terminate("processId");
 
         assertThat(result).isFailed();
-    }
-
-    private static HttpResponse withResponse(String errorMsg) throws JsonProcessingException {
-        return response().withStatusCode(HttpStatusCode.BAD_REQUEST_400.code())
-                .withBody(MAPPER.writeValueAsString(new TransferErrorResponse(List.of(errorMsg))), MediaType.APPLICATION_JSON);
-    }
-
-    private static DataFlowRequest createDataFlowRequest() {
-        return DataFlowRequest.Builder.newInstance()
-                .trackable(true)
-                .id("123")
-                .processId("456")
-                .sourceDataAddress(DataAddress.Builder.newInstance().type("test").build())
-                .destinationDataAddress(DataAddress.Builder.newInstance().type("test").build())
-                .build();
     }
 }

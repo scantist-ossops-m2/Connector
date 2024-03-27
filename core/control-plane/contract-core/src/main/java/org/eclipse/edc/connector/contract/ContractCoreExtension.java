@@ -30,7 +30,7 @@ import org.eclipse.edc.connector.contract.spi.negotiation.store.ContractNegotiat
 import org.eclipse.edc.connector.contract.spi.types.negotiation.ContractNegotiation;
 import org.eclipse.edc.connector.contract.spi.validation.ContractValidationService;
 import org.eclipse.edc.connector.contract.validation.ContractValidationServiceImpl;
-import org.eclipse.edc.connector.core.policy.ContractExpiryCheckFunction;
+import org.eclipse.edc.connector.policy.contract.ContractExpiryCheckFunction;
 import org.eclipse.edc.connector.policy.spi.store.PolicyDefinitionStore;
 import org.eclipse.edc.policy.engine.spi.PolicyEngine;
 import org.eclipse.edc.policy.engine.spi.RuleBindingRegistry;
@@ -40,7 +40,6 @@ import org.eclipse.edc.runtime.metamodel.annotation.Extension;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
 import org.eclipse.edc.runtime.metamodel.annotation.Provides;
 import org.eclipse.edc.runtime.metamodel.annotation.Setting;
-import org.eclipse.edc.spi.agent.ParticipantAgentService;
 import org.eclipse.edc.spi.asset.AssetIndex;
 import org.eclipse.edc.spi.event.EventRouter;
 import org.eclipse.edc.spi.message.RemoteMessageDispatcherRegistry;
@@ -58,12 +57,12 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Clock;
 
 import static org.eclipse.edc.connector.contract.spi.validation.ContractValidationService.TRANSFER_SCOPE;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_BATCH_SIZE;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_ITERATION_WAIT;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_SEND_RETRY_BASE_DELAY;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_SEND_RETRY_LIMIT;
-import static org.eclipse.edc.connector.core.policy.ContractExpiryCheckFunction.CONTRACT_EXPIRY_EVALUATION_KEY;
-import static org.eclipse.edc.policy.model.OdrlNamespace.ODRL_SCHEMA;
+import static org.eclipse.edc.connector.policy.contract.ContractExpiryCheckFunction.CONTRACT_EXPIRY_EVALUATION_KEY;
+import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_USE_ACTION_ATTRIBUTE;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_BATCH_SIZE;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_ITERATION_WAIT;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_SEND_RETRY_BASE_DELAY;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_SEND_RETRY_LIMIT;
 
 @Provides({
         ContractValidationService.class, ConsumerContractNegotiationManager.class,
@@ -108,9 +107,6 @@ public class ContractCoreExtension implements ServiceExtension {
 
     @Inject
     private ContractNegotiationStore store;
-
-    @Inject
-    private ParticipantAgentService agentService;
 
     @Inject
     private PolicyEngine policyEngine;
@@ -180,12 +176,11 @@ public class ContractCoreExtension implements ServiceExtension {
         var participantId = context.getParticipantId();
 
         var policyEquality = new PolicyEquality(typeManager);
-        var validationService = new ContractValidationServiceImpl(agentService, assetIndex, policyEngine, policyEquality);
+        var validationService = new ContractValidationServiceImpl(assetIndex, policyEngine, policyEquality);
         context.registerService(ContractValidationService.class, validationService);
 
         // bind/register rule to evaluate contract expiry
-        ruleBindingRegistry.bind("USE", TRANSFER_SCOPE);
-        ruleBindingRegistry.bind(ODRL_SCHEMA + "use", TRANSFER_SCOPE);
+        ruleBindingRegistry.bind(ODRL_USE_ACTION_ATTRIBUTE, TRANSFER_SCOPE);
         ruleBindingRegistry.bind(CONTRACT_EXPIRY_EVALUATION_KEY, TRANSFER_SCOPE);
         var function = new ContractExpiryCheckFunction();
         policyEngine.registerFunction(TRANSFER_SCOPE, Permission.class, CONTRACT_EXPIRY_EVALUATION_KEY, function);

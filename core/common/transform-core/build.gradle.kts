@@ -25,6 +25,6 @@ dependencies {
 
     api(libs.jakartaJson)
 
-    testImplementation(project(":core:common:junit"))
-    testImplementation(project(":extensions:common:json-ld"))
+    testImplementation(project(":tests:junit-base"));
+    testImplementation(project(":core:common:lib:json-ld-lib"))
 }

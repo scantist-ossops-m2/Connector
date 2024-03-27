@@ -15,6 +15,7 @@
 package org.eclipse.edc.jsonld;
 
 import org.eclipse.edc.jsonld.spi.JsonLd;
+import org.eclipse.edc.jsonld.spi.JsonLdKeywords;
 import org.eclipse.edc.jsonld.spi.transformer.JsonLdTransformer;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
 import org.eclipse.edc.runtime.metamodel.annotation.BaseExtension;
@@ -32,9 +33,9 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
-import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.VOCAB;
 import static org.eclipse.edc.spi.CoreConstants.EDC_NAMESPACE;
 import static org.eclipse.edc.spi.CoreConstants.EDC_PREFIX;
 import static org.eclipse.edc.spi.CoreConstants.JSON_LD;
@@ -85,13 +86,17 @@ public class JsonLdExtension implements ServiceExtension {
         var monitor = context.getMonitor();
         var service = new TitaniumJsonLd(monitor, configuration);
         if (!config.getBoolean(AVOID_VOCAB_CONTEXT, Boolean.valueOf(DEFAULT_AVOID_VOCAB_CONTEXT))) {
-            service.registerNamespace(VOCAB, EDC_NAMESPACE);
+            service.registerNamespace(JsonLdKeywords.VOCAB, EDC_NAMESPACE);
         }
         service.registerNamespace(EDC_PREFIX, EDC_NAMESPACE);
 
-        getResourceUri("document" + File.separator + "odrl.jsonld")
-                .onSuccess(uri -> service.registerCachedDocument("http://www.w3.org/ns/odrl.jsonld", uri))
-                .onFailure(failure -> monitor.warning("Failed to register cached json-ld document: " + failure.getFailureDetail()));
+        Stream.of(
+                new JsonLdContext("odrl.jsonld", "http://www.w3.org/ns/odrl.jsonld"),
+                new JsonLdContext("dspace.jsonld", "https://w3id.org/dspace/2024/1/context.json")
+        ).forEach(jsonLdContext -> getResourceUri("document" + File.separator + jsonLdContext.fileName())
+                .onSuccess(uri -> service.registerCachedDocument(jsonLdContext.url(), uri))
+                .onFailure(failure -> monitor.warning("Failed to register cached json-ld document: " + failure.getFailureDetail()))
+        );
 
         registerCachedDocumentsFromConfig(context, service);
 
@@ -126,5 +131,6 @@ public class JsonLdExtension implements ServiceExtension {
         }
     }
 
+    record JsonLdContext(String fileName, String url) { }
 
 }

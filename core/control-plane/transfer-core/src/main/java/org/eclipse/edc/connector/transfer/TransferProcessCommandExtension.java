@@ -16,6 +16,8 @@ package org.eclipse.edc.connector.transfer;
 
 import org.eclipse.edc.connector.transfer.command.handlers.CompleteTransferCommandHandler;
 import org.eclipse.edc.connector.transfer.command.handlers.DeprovisionRequestCommandHandler;
+import org.eclipse.edc.connector.transfer.command.handlers.ResumeTransferCommandHandler;
+import org.eclipse.edc.connector.transfer.command.handlers.SuspendTransferCommandHandler;
 import org.eclipse.edc.connector.transfer.command.handlers.TerminateTransferCommandHandler;
 import org.eclipse.edc.connector.transfer.spi.store.TransferProcessStore;
 import org.eclipse.edc.runtime.metamodel.annotation.CoreExtension;
@@ -38,6 +40,8 @@ public class TransferProcessCommandExtension implements ServiceExtension {
         var registry = context.getService(CommandHandlerRegistry.class);
 
         registry.register(new TerminateTransferCommandHandler(store));
+        registry.register(new SuspendTransferCommandHandler(store));
+        registry.register(new ResumeTransferCommandHandler(store));
         registry.register(new DeprovisionRequestCommandHandler(store));
         registry.register(new CompleteTransferCommandHandler(store));
     }

@@ -27,6 +27,7 @@ import org.eclipse.edc.spi.EdcException;
 import org.eclipse.edc.spi.http.EdcHttpClient;
 import org.eclipse.edc.spi.iam.AudienceResolver;
 import org.eclipse.edc.spi.iam.IdentityService;
+import org.eclipse.edc.spi.iam.RequestContext;
 import org.eclipse.edc.spi.iam.RequestScope;
 import org.eclipse.edc.spi.iam.TokenParameters;
 import org.eclipse.edc.spi.response.StatusResult;
@@ -53,17 +54,15 @@ import static org.eclipse.edc.spi.response.ResponseStatus.FATAL_ERROR;
  */
 public class DspHttpRemoteMessageDispatcherImpl implements DspHttpRemoteMessageDispatcher {
 
+    private static final String AUDIENCE_CLAIM = "aud";
+    private static final String SCOPE_CLAIM = "scope";
     private final Map<Class<? extends RemoteMessage>, MessageHandler<?, ?>> handlers = new HashMap<>();
     private final Map<Class<? extends RemoteMessage>, PolicyScope<? extends RemoteMessage>> policyScopes = new HashMap<>();
     private final EdcHttpClient httpClient;
     private final IdentityService identityService;
     private final PolicyEngine policyEngine;
     private final TokenDecorator tokenDecorator;
-
     private final AudienceResolver audienceResolver;
-
-    private static final String AUDIENCE_CLAIM = "aud";
-    private static final String SCOPE_CLAIM = "scope";
 
 
     public DspHttpRemoteMessageDispatcherImpl(EdcHttpClient httpClient,
@@ -92,20 +91,33 @@ public class DspHttpRemoteMessageDispatcherImpl implements DspHttpRemoteMessageD
 
         var request = handler.requestFactory.createRequest(message);
 
-        var tokenParametersBuilder = tokenDecorator.decorate(TokenParameters.Builder.newInstance());
+        var tokenParametersBuilder = TokenParameters.Builder.newInstance();
 
         var policyScope = policyScopes.get(message.getClass());
         if (policyScope != null) {
             var requestScopeBuilder = RequestScope.Builder.newInstance();
+            var requestContext = RequestContext.Builder.newInstance()
+                    .message(message)
+                    .direction(RequestContext.Direction.Egress)
+                    .build();
+            
             var context = PolicyContextImpl.Builder.newInstance()
                     .additional(RequestScope.Builder.class, requestScopeBuilder)
+                    .additional(RequestContext.class, requestContext)
                     .build();
             var policyProvider = (Function<M, Policy>) policyScope.policyProvider;
             policyEngine.evaluate(policyScope.scope, policyProvider.apply(message), context);
 
-            tokenParametersBuilder.claims(SCOPE_CLAIM, String.join(" ", requestScopeBuilder.build().getScopes()));
+            var scopes = requestScopeBuilder.build().getScopes();
+
+            // Only add the scope claim if there are scopes returned from the policy engine evaluation
+            if (!scopes.isEmpty()) {
+                tokenParametersBuilder.claims(SCOPE_CLAIM, String.join(" ", scopes));
+            }
 
         }
+
+        tokenParametersBuilder = tokenDecorator.decorate(tokenParametersBuilder);
 
         var tokenParameters = tokenParametersBuilder
                 .claims(AUDIENCE_CLAIM, audienceResolver.resolve(message)) // enforce the audience, ignore anything a decorator might have set
@@ -124,14 +136,14 @@ public class DspHttpRemoteMessageDispatcherImpl implements DspHttpRemoteMessageD
     }
 
     @Override
-    public <M extends RemoteMessage> void registerPolicyScope(Class<M> messageClass, String scope, Function<M, Policy> policyProvider) {
-        policyScopes.put(messageClass, new PolicyScope<>(messageClass, scope, policyProvider));
-    }
-
-    @Override
     public <M extends RemoteMessage, R> void registerMessage(Class<M> clazz, DspHttpRequestFactory<M> requestFactory,
                                                              DspHttpResponseBodyExtractor<R> bodyExtractor) {
         handlers.put(clazz, new MessageHandler<>(requestFactory, bodyExtractor));
+    }
+
+    @Override
+    public <M extends RemoteMessage> void registerPolicyScope(Class<M> messageClass, String scope, Function<M, Policy> policyProvider) {
+        policyScopes.put(messageClass, new PolicyScope<>(messageClass, scope, policyProvider));
     }
 
     @NotNull

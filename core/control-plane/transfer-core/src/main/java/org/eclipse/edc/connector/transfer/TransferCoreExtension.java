@@ -34,7 +34,6 @@ import org.eclipse.edc.connector.transfer.spi.provision.ProvisionManager;
 import org.eclipse.edc.connector.transfer.spi.provision.ResourceManifestGenerator;
 import org.eclipse.edc.connector.transfer.spi.retry.TransferWaitStrategy;
 import org.eclipse.edc.connector.transfer.spi.store.TransferProcessStore;
-import org.eclipse.edc.connector.transfer.spi.types.DataRequest;
 import org.eclipse.edc.connector.transfer.spi.types.DeprovisionedResource;
 import org.eclipse.edc.connector.transfer.spi.types.ProvisionedContentResource;
 import org.eclipse.edc.runtime.metamodel.annotation.CoreExtension;
@@ -60,10 +59,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.time.Clock;
 
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_BATCH_SIZE;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_ITERATION_WAIT;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_SEND_RETRY_BASE_DELAY;
-import static org.eclipse.edc.connector.core.entity.AbstractStateEntityManager.DEFAULT_SEND_RETRY_LIMIT;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_BATCH_SIZE;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_ITERATION_WAIT;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_SEND_RETRY_BASE_DELAY;
+import static org.eclipse.edc.statemachine.AbstractStateEntityManager.DEFAULT_SEND_RETRY_LIMIT;
 
 /**
  * Provides core data transfer services to the system.
@@ -219,7 +218,6 @@ public class TransferCoreExtension implements ServiceExtension {
     }
 
     private void registerTypes(TypeManager typeManager) {
-        typeManager.registerTypes(DataRequest.class);
         typeManager.registerTypes(ProvisionedContentResource.class);
         typeManager.registerTypes(DeprovisionedResource.class);
     }

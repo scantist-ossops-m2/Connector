@@ -14,12 +14,12 @@
 
 package org.eclipse.edc.connector.defaults.storage.transferprocess;
 
-import org.eclipse.edc.connector.core.store.InMemoryStatefulEntityStore;
 import org.eclipse.edc.connector.transfer.spi.store.TransferProcessStore;
 import org.eclipse.edc.connector.transfer.spi.types.TransferProcess;
 import org.eclipse.edc.spi.query.CriterionOperatorRegistry;
 import org.eclipse.edc.spi.query.QuerySpec;
 import org.eclipse.edc.spi.result.StoreResult;
+import org.eclipse.edc.store.InMemoryStatefulEntityStore;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Clock;
@@ -44,7 +44,7 @@ public class InMemoryTransferProcessStore extends InMemoryStatefulEntityStore<Tr
 
     @Override
     public @Nullable TransferProcess findForCorrelationId(String correlationId) {
-        var querySpec = QuerySpec.Builder.newInstance().filter(criterion("dataRequest.id", "=", correlationId)).build();
+        var querySpec = QuerySpec.Builder.newInstance().filter(criterion("correlationId", "=", correlationId)).build();
 
         return super.findAll(querySpec).findFirst().orElse(null);
     }
