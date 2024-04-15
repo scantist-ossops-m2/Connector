@@ -16,6 +16,7 @@ package org.eclipse.edc.iam.oauth2.client;
 
 import org.eclipse.edc.iam.oauth2.spi.client.Oauth2CredentialsRequest;
 import org.eclipse.edc.iam.oauth2.spi.client.SharedSecretOauth2CredentialsRequest;
+import org.eclipse.edc.json.JacksonTypeManager;
 import org.eclipse.edc.spi.types.TypeManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,8 +31,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.eclipse.edc.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.eclipse.edc.util.io.Ports.getFreePort;
-import static org.eclipse.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
 import static org.mockserver.model.MediaType.APPLICATION_JSON;
 
@@ -39,7 +40,7 @@ class Oauth2ClientImplTest {
 
     private final int port = getFreePort();
     private final ClientAndServer server = startClientAndServer(port);
-    private final TypeManager typeManager = new TypeManager();
+    private final TypeManager typeManager = new JacksonTypeManager();
 
     private Oauth2ClientImpl client;
 

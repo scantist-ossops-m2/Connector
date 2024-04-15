@@ -22,8 +22,8 @@ dependencies {
     api(project(":spi:common:web-spi"))
     api(project(":spi:data-plane:data-plane-spi"))
 
-    implementation(project(":core:common:transform-core"))
-    implementation(project(":extensions:common:lib:jersey-providers-lib"))
+    implementation(project(":core:common:lib:transform-lib"))
+    implementation(project(":extensions:common:http:lib:jersey-providers-lib"))
     implementation(libs.jakarta.rsApi)
 
     testImplementation(project(":core:common:junit"))

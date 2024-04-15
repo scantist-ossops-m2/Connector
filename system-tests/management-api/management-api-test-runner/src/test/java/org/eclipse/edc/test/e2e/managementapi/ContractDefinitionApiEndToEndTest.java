@@ -17,15 +17,15 @@ package org.eclipse.edc.test.e2e.managementapi;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObjectBuilder;
 import jakarta.json.JsonValue;
-import org.eclipse.edc.connector.contract.spi.offer.store.ContractDefinitionStore;
-import org.eclipse.edc.connector.contract.spi.types.offer.ContractDefinition;
+import org.eclipse.edc.connector.controlplane.contract.spi.offer.store.ContractDefinitionStore;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.offer.ContractDefinition;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.annotations.PostgresqlIntegrationTest;
 import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
-import org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.UUID;
 
@@ -38,8 +38,11 @@ import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.CONTEXT;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.ID;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.TYPE;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.VOCAB;
-import static org.eclipse.edc.spi.CoreConstants.EDC_NAMESPACE;
+import static org.eclipse.edc.spi.constants.CoreConstants.EDC_NAMESPACE;
 import static org.eclipse.edc.spi.query.Criterion.criterion;
+import static org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance.createDatabase;
+import static org.eclipse.edc.test.e2e.managementapi.Runtimes.inMemoryRuntime;
+import static org.eclipse.edc.test.e2e.managementapi.Runtimes.postgresRuntime;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
@@ -48,7 +51,10 @@ public class ContractDefinitionApiEndToEndTest {
 
     @Nested
     @EndToEndTest
-    class InMemory extends Tests implements InMemoryRuntime {
+    class InMemory extends Tests {
+
+        @RegisterExtension
+        public static final EdcRuntimeExtension RUNTIME = inMemoryRuntime();
 
         InMemory() {
             super(RUNTIME);
@@ -58,17 +64,17 @@ public class ContractDefinitionApiEndToEndTest {
 
     @Nested
     @PostgresqlIntegrationTest
-    class Postgres extends Tests implements PostgresRuntime {
+    class Postgres extends Tests {
+
+        @RegisterExtension
+        static final BeforeAllCallback CREATE_DATABASE = context -> createDatabase("runtime");
+
+        @RegisterExtension
+        public static final EdcRuntimeExtension RUNTIME = postgresRuntime();
 
         Postgres() {
             super(RUNTIME);
         }
-
-        @BeforeAll
-        static void beforeAll() {
-            PostgresqlEndToEndInstance.createDatabase("runtime");
-        }
-
     }
 
     abstract static class Tests extends ManagementApiEndToEndTestBase {

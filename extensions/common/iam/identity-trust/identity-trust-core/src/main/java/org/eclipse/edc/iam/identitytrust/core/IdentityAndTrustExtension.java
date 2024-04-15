@@ -15,20 +15,24 @@
 package org.eclipse.edc.iam.identitytrust.core;
 
 import jakarta.json.Json;
+import org.eclipse.edc.http.spi.EdcHttpClient;
 import org.eclipse.edc.iam.did.spi.resolution.DidPublicKeyResolver;
 import org.eclipse.edc.iam.did.spi.resolution.DidResolverRegistry;
-import org.eclipse.edc.iam.identitytrust.DidCredentialServiceUrlResolver;
-import org.eclipse.edc.iam.identitytrust.IdentityAndTrustService;
 import org.eclipse.edc.iam.identitytrust.core.defaults.DefaultCredentialServiceClient;
-import org.eclipse.edc.iam.identitytrust.verification.MultiFormatPresentationVerifier;
-import org.eclipse.edc.identitytrust.ClaimTokenCreatorFunction;
-import org.eclipse.edc.identitytrust.CredentialServiceClient;
-import org.eclipse.edc.identitytrust.IatpParticipantAgentServiceExtension;
-import org.eclipse.edc.identitytrust.SecureTokenService;
-import org.eclipse.edc.identitytrust.TrustedIssuerRegistry;
-import org.eclipse.edc.identitytrust.validation.TokenValidationAction;
-import org.eclipse.edc.identitytrust.verification.PresentationVerifier;
-import org.eclipse.edc.identitytrust.verification.SignatureSuiteRegistry;
+import org.eclipse.edc.iam.identitytrust.service.DidCredentialServiceUrlResolver;
+import org.eclipse.edc.iam.identitytrust.service.IdentityAndTrustService;
+import org.eclipse.edc.iam.identitytrust.service.verification.MultiFormatPresentationVerifier;
+import org.eclipse.edc.iam.identitytrust.spi.ClaimTokenCreatorFunction;
+import org.eclipse.edc.iam.identitytrust.spi.CredentialServiceClient;
+import org.eclipse.edc.iam.identitytrust.spi.IatpParticipantAgentServiceExtension;
+import org.eclipse.edc.iam.identitytrust.spi.SecureTokenService;
+import org.eclipse.edc.iam.identitytrust.spi.validation.TokenValidationAction;
+import org.eclipse.edc.iam.identitytrust.spi.verification.SignatureSuiteRegistry;
+import org.eclipse.edc.iam.verifiablecredentials.StatusList2021RevocationService;
+import org.eclipse.edc.iam.verifiablecredentials.VerifiableCredentialValidationServiceImpl;
+import org.eclipse.edc.iam.verifiablecredentials.spi.RevocationListService;
+import org.eclipse.edc.iam.verifiablecredentials.spi.validation.PresentationVerifier;
+import org.eclipse.edc.iam.verifiablecredentials.spi.validation.TrustedIssuerRegistry;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.runtime.metamodel.annotation.Extension;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
@@ -36,7 +40,6 @@ import org.eclipse.edc.runtime.metamodel.annotation.Provider;
 import org.eclipse.edc.runtime.metamodel.annotation.Setting;
 import org.eclipse.edc.security.signature.jws2020.JwsSignature2020Suite;
 import org.eclipse.edc.spi.agent.ParticipantAgentService;
-import org.eclipse.edc.spi.http.EdcHttpClient;
 import org.eclipse.edc.spi.iam.IdentityService;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
@@ -56,15 +59,20 @@ import org.eclipse.edc.verifiablecredentials.linkeddata.DidMethodResolver;
 import org.eclipse.edc.verifiablecredentials.linkeddata.LdpVerifier;
 import org.jetbrains.annotations.NotNull;
 
+import java.net.URISyntaxException;
 import java.time.Clock;
 import java.util.Map;
 
-import static org.eclipse.edc.spi.CoreConstants.JSON_LD;
+import static org.eclipse.edc.iam.verifiablecredentials.spi.VcConstants.STATUSLIST_2021_URL;
+import static org.eclipse.edc.spi.constants.CoreConstants.JSON_LD;
 import static org.eclipse.edc.verifiablecredentials.jwt.JwtPresentationVerifier.JWT_VC_TOKEN_CONTEXT;
 
 @Extension("Identity And Trust Extension")
 public class IdentityAndTrustExtension implements ServiceExtension {
 
+    public static final long DEFAULT_REVOCATION_CACHE_VALIDITY_MILLIS = 15 * 60 * 1000L;
+    @Setting(value = "Validity period of cached StatusList2021 credential entries in milliseconds.", defaultValue = DEFAULT_REVOCATION_CACHE_VALIDITY_MILLIS + "", type = "long")
+    public static final String REVOCATION_CACHE_VALIDITY = "edc.iam.credential.revocation.cache.validity";
     @Setting(value = "DID of this connector", required = true)
     public static final String CONNECTOR_DID_PROPERTY = "edc.iam.issuer.id";
     public static final String IATP_SELF_ISSUED_TOKEN_CONTEXT = "iatp-si";
@@ -76,7 +84,7 @@ public class IdentityAndTrustExtension implements ServiceExtension {
     private SecureTokenService secureTokenService;
 
     @Inject
-    private TrustedIssuerRegistry registry;
+    private TrustedIssuerRegistry trustedIssuerRegistry;
 
     @Inject
     private TypeManager typeManager;
@@ -117,6 +125,7 @@ public class IdentityAndTrustExtension implements ServiceExtension {
 
     private PresentationVerifier presentationVerifier;
     private CredentialServiceClient credentialServiceClient;
+    private RevocationListService revocationListService;
 
     @Override
     public void initialize(ServiceExtensionContext context) {
@@ -136,18 +145,26 @@ public class IdentityAndTrustExtension implements ServiceExtension {
         // TODO move in a separated extension?
         signatureSuiteRegistry.register(JSON_2020_SIGNATURE_SUITE, new JwsSignature2020Suite(typeManager.getMapper(JSON_LD)));
 
+        try {
+            jsonLd.registerCachedDocument(STATUSLIST_2021_URL, getClass().getClassLoader().getResource("statuslist2021.json").toURI());
+        } catch (URISyntaxException e) {
+            context.getMonitor().warning("Could not load JSON-LD file", e);
+        }
+
         participantAgentService.register(participantAgentServiceExtension);
     }
 
     @Provider
     public IdentityService createIdentityService(ServiceExtensionContext context) {
-
         var credentialServiceUrlResolver = new DidCredentialServiceUrlResolver(didResolverRegistry);
-
         var validationAction = tokenValidationAction();
 
-        return new IdentityAndTrustService(secureTokenService, getOwnDid(context), getPresentationVerifier(context),
-                getCredentialServiceClient(context), validationAction, registry, clock, credentialServiceUrlResolver, claimTokenFunction);
+        var credentialValidationService = new VerifiableCredentialValidationServiceImpl(createPresentationVerifier(context),
+                trustedIssuerRegistry, createRevocationListService(context), clock);
+        
+        return new IdentityAndTrustService(secureTokenService, getOwnDid(context),
+                getCredentialServiceClient(context), validationAction, credentialServiceUrlResolver, claimTokenFunction,
+                credentialValidationService);
     }
 
     @Provider
@@ -160,7 +177,7 @@ public class IdentityAndTrustExtension implements ServiceExtension {
     }
 
     @Provider
-    public PresentationVerifier getPresentationVerifier(ServiceExtensionContext context) {
+    public PresentationVerifier createPresentationVerifier(ServiceExtensionContext context) {
         if (presentationVerifier == null) {
             var mapper = typeManager.getMapper(JSON_LD);
 
@@ -177,6 +194,15 @@ public class IdentityAndTrustExtension implements ServiceExtension {
         return presentationVerifier;
     }
 
+    @Provider
+    public RevocationListService createRevocationListService(ServiceExtensionContext context) {
+        if (revocationListService == null) {
+            var validity = context.getConfig().getLong(REVOCATION_CACHE_VALIDITY, DEFAULT_REVOCATION_CACHE_VALIDITY_MILLIS);
+            revocationListService = new StatusList2021RevocationService(typeManager.getMapper(), validity);
+        }
+        return revocationListService;
+    }
+
     @NotNull
     private TokenValidationAction tokenValidationAction() {
         return (tokenRepresentation) -> {
@@ -186,7 +212,11 @@ public class IdentityAndTrustExtension implements ServiceExtension {
     }
 
     private String getOwnDid(ServiceExtensionContext context) {
-        return context.getConfig().getString(CONNECTOR_DID_PROPERTY);
+        var ownDid = context.getConfig().getString(CONNECTOR_DID_PROPERTY, null);
+        if (ownDid == null) {
+            context.getMonitor().severe("Mandatory config value missing: '%s'. This runtime will not be fully operational!".formatted(CONNECTOR_DID_PROPERTY));
+        }
+        return ownDid;
     }
 
 }

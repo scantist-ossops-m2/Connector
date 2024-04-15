@@ -20,7 +20,9 @@ dependencies {
     testImplementation(project(":core:common:junit"))
     // gives access to the Json LD models, etc.
     testImplementation(project(":spi:common:json-ld-spi"))
+    testImplementation(project(":spi:control-plane:asset-spi"))
     testImplementation(project(":spi:control-plane:contract-spi"))
+    testImplementation(project(":spi:data-plane-selector:data-plane-selector-spi"))
     testImplementation(project(":core:common:connector-core"))
 
     //useful for generic DTOs etc.

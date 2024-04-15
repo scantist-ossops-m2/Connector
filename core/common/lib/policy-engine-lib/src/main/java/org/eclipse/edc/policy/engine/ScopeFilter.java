@@ -29,8 +29,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
-
-import static java.util.stream.Collectors.toList;
+import java.util.function.Function;
 
 /**
  * Filters a policy for a scope. This involves recursively removing rules and constraints not bound to the scope and
@@ -56,11 +55,10 @@ public class ScopeFilter {
     }
 
     public Policy applyScope(Policy policy, String scope) {
-        var filteredObligations = policy.getObligations().stream().map(d -> applyScope(d, scope)).filter(Objects::nonNull).collect(toList());
-        var filteredPermissions = policy.getPermissions().stream().map(p -> applyScope(p, scope)).filter(Objects::nonNull).collect(toList());
-        var filteredProhibitions = policy.getProhibitions().stream().map(p -> applyScope(p, scope)).filter(Objects::nonNull).collect(toList());
-        var policyBuilder = Policy.Builder.newInstance();
-        policyBuilder
+        var filteredObligations = filterBy(policy.getObligations(), d -> applyScope(d, scope));
+        var filteredPermissions = filterBy(policy.getPermissions(), d -> applyScope(d, scope));
+        var filteredProhibitions = filterBy(policy.getProhibitions(), d -> applyScope(d, scope));
+        return Policy.Builder.newInstance()
                 .type(policy.getType())
                 .assignee(policy.getAssignee())
                 .assigner(policy.getAssigner())
@@ -69,8 +67,8 @@ public class ScopeFilter {
                 .duties(filteredObligations)
                 .permissions(filteredPermissions)
                 .prohibitions(filteredProhibitions)
-                .extensibleProperties(policy.getExtensibleProperties());
-        return policyBuilder.build();
+                .extensibleProperties(policy.getExtensibleProperties())
+                .build();
     }
 
     @Nullable
@@ -78,8 +76,8 @@ public class ScopeFilter {
         if (actionNotInScope(permission, scope)) {
             return null;
         }
-        var filteredConstraints = applyScope(permission.getConstraints(), scope);
-        var filteredDuties = permission.getDuties().stream().map(d -> applyScope(d, scope)).filter(Objects::nonNull).collect(toList());
+        var filteredConstraints = filterBy(permission.getConstraints(), c -> applyScope(c, scope));
+        var filteredDuties = filterBy(permission.getDuties(), d -> applyScope(d, scope));
 
         return Permission.Builder.newInstance()
                 .action(permission.getAction())
@@ -93,14 +91,14 @@ public class ScopeFilter {
         if (actionNotInScope(duty, scope)) {
             return null;
         }
-        var filteredConsequence = duty.getConsequence() != null ? applyScope(duty.getConsequence(), scope) : null;
-        var filteredConstraints = applyScope(duty.getConstraints(), scope);
+        var filteredConsequences = filterBy(duty.getConsequences(), d -> applyScope(d, scope));
+        var filteredConstraints = filterBy(duty.getConstraints(), c -> applyScope(c, scope));
 
         return Duty.Builder.newInstance()
                 .action(duty.getAction())
                 .constraints(filteredConstraints)
                 .parentPermission(duty.getParentPermission())
-                .consequence(filteredConsequence)
+                .consequences(filteredConsequences)
                 .build();
     }
 
@@ -109,20 +107,22 @@ public class ScopeFilter {
         if (actionNotInScope(prohibition, scope)) {
             return null;
         }
-        var filteredConstraints = applyScope(prohibition.getConstraints(), scope);
+        var filteredConstraints = filterBy(prohibition.getConstraints(), c -> applyScope(c, scope));
+        var filteredRemedies = filterBy(prohibition.getRemedies(), d -> applyScope(d, scope));
 
         return Prohibition.Builder.newInstance()
                 .action(prohibition.getAction())
                 .constraints(filteredConstraints)
+                .remedies(filteredRemedies)
                 .build();
     }
 
     @Nullable
     Constraint applyScope(Constraint rootConstraint, String scope) {
-        if (rootConstraint instanceof AtomicConstraint) {
-            return applyScope((AtomicConstraint) rootConstraint, scope);
+        if (rootConstraint instanceof AtomicConstraint atomicConstraint) {
+            return applyScope(atomicConstraint, scope);
         } else if (rootConstraint instanceof MultiplicityConstraint multiplicityConstraint) {
-            var filteredConstraints = multiplicityConstraint.getConstraints().stream().map(c -> applyScope(c, scope)).filter(Objects::nonNull).collect(toList());
+            var filteredConstraints = multiplicityConstraint.getConstraints().stream().map(c -> applyScope(c, scope)).filter(Objects::nonNull).toList();
             return filteredConstraints.isEmpty() ? null : multiplicityConstraint.create(filteredConstraints);
         }
         return rootConstraint;
@@ -132,16 +132,16 @@ public class ScopeFilter {
         return rule.getAction() != null && !registry.isInScope(rule.getAction().getType(), scope);
     }
 
-    private List<Constraint> applyScope(List<Constraint> constraints, String scope) {
-        return constraints.stream().map(constraint -> applyScope(constraint, scope)).filter(Objects::nonNull).collect(toList());
-    }
-
     @Nullable
     private Constraint applyScope(AtomicConstraint constraint, String scope) {
-        if (constraint.getLeftExpression() instanceof LiteralExpression) {
-            return registry.isInScope(((LiteralExpression) constraint.getLeftExpression()).asString(), scope) ? constraint : null;
+        if (constraint.getLeftExpression() instanceof LiteralExpression literalExpression) {
+            return registry.isInScope(literalExpression.asString(), scope) ? constraint : null;
         } else {
             return constraint;
         }
+    }
+
+    private <T> List<T> filterBy(List<T> list, Function<T, T> filterFunction) {
+        return list.stream().map(filterFunction).filter(Objects::nonNull).toList();
     }
 }

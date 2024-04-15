@@ -6,32 +6,32 @@ apacheCommonsPool2 = "2.12.0"
 apicatalog = "0.8.1"
 assertj = "3.25.3"
 atomikos = "6.0.0"
-awaitility = "4.2.0"
-bouncyCastle-jdk18on = "1.77"
-cloudEvents = "2.5.0"
-edc = "0.5.2-SNAPSHOT"
+awaitility = "4.2.1"
+bouncyCastle-jdk18on = "1.78"
+cloudEvents = "3.0.0"
+edc = "0.6.1-SNAPSHOT"
 failsafe = "3.3.2"
 h2 = "2.2.224"
 httpMockServer = "5.15.0"
 jakarta-json = "2.0.1"
 jakarta-transaction = "2.0.1"
-jackson = "2.16.2"
+jackson = "2.17.0"
 jersey = "3.1.5"
 jetbrainsAnnotation = "24.1.0"
 jetty = "11.0.20"
 jetty-jakarta-servlet-api = "5.0.2"
 junit-pioneer = "2.2.0"
 jupiter = "5.10.2"
-micrometer = "1.12.4"
+micrometer = "1.12.5"
 mockito = "5.2.0"
 nimbus = "9.37.3"
 okhttp = "4.12.0"
 opentelemetry = "1.32.0"
-opentelemetry-proto = "1.1.0-alpha"
-postgres = "42.7.2"
+opentelemetry-proto = "1.2.0-alpha"
+postgres = "42.7.3"
 restAssured = "5.4.0"
 rsApi = "3.1.0"
-swagger-annotations-jakarta = "2.2.20"
+swagger-annotations-jakarta = "2.2.21"
 titanium = "1.4.0"
 kafkaClients = "3.7.0"
 testcontainers = "1.19.7"
@@ -51,11 +51,9 @@ failsafe-core = { module = "dev.failsafe:failsafe", version.ref = "failsafe" }
 failsafe-okhttp = { module = "dev.failsafe:failsafe-okhttp", version.ref = "failsafe" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jackson" }
-jackson-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
-jackson-dataformat-xml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-xml", version.ref = "jackson" }
-jackson-datatypeJsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
-jacksonJsonP = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jakarta-jsonp", version.ref = "jackson" }
+jackson-datatype-jakarta-jsonp = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jakarta-jsonp", version.ref = "jackson" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson" }
 jakarta-rsApi = { module = "jakarta.ws.rs:jakarta.ws.rs-api", version.ref = "rsApi" }
 jakarta-transaction-api = { module = "jakarta.transaction:jakarta.transaction-api", version.ref = "jakarta-transaction" }
 jakartaJson = { module = "org.glassfish:jakarta.json", version.ref = "jakarta-json" }
@@ -103,8 +101,8 @@ kafkaClients = { module = "org.apache.kafka:kafka-clients", version.ref = "kafka
 
 
 [bundles]
+jackson = ["jackson.annotations", "jackson.databind"]
 jersey-core = ["jersey.server", "jersey.common", "jersey.jackson", "jersey.multipart", "jersey.inject", "jersey.servlet", "jersey.servletcore"]
-jackson = ["jackson.core", "jackson.annotations", "jackson.databind", "jackson-datatypeJsr310"]
 jupiter = ["junit-jupiter-api", "junit-jupiter-params"]
 
 [plugins]

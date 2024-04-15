@@ -22,9 +22,10 @@ dependencies {
     api(project(":spi:common:web-spi"))
     api(project(":spi:control-plane:contract-spi"))
 
-    implementation(project(":extensions:common:lib:jersey-providers-lib"))
+    implementation(project(":extensions:common:http:lib:jersey-providers-lib"))
     implementation(project(":extensions:common:api:api-core"))
-    implementation(project(":core:common:transform-core"))
+    implementation(project(":core:common:lib:transform-lib"))
+    implementation(project(":core:control-plane:control-plane-transform"))
 
     implementation(libs.swagger.annotations.jakarta)
 

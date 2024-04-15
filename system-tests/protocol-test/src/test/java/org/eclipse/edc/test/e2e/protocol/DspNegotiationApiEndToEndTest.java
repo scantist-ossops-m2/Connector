@@ -14,13 +14,13 @@
 
 package org.eclipse.edc.test.e2e.protocol;
 
-import org.eclipse.edc.connector.contract.spi.negotiation.store.ContractNegotiationStore;
-import org.eclipse.edc.connector.contract.spi.types.negotiation.ContractNegotiation;
-import org.eclipse.edc.connector.spi.protocol.ProtocolVersionRegistry;
+import org.eclipse.edc.connector.controlplane.contract.spi.negotiation.store.ContractNegotiationStore;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.negotiation.ContractNegotiation;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.offer.ContractOffer;
+import org.eclipse.edc.connector.controlplane.services.spi.protocol.ProtocolVersionRegistry;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
 import org.eclipse.edc.policy.model.Policy;
-import org.eclipse.edc.spi.types.domain.offer.ContractOffer;
 import org.eclipse.edc.util.io.Ports;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -31,8 +31,8 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.edc.connector.contract.spi.types.negotiation.ContractNegotiationStates.REQUESTED;
-import static org.eclipse.edc.protocol.dsp.version.DspVersions.V_2024_1;
+import static org.eclipse.edc.connector.controlplane.contract.spi.types.negotiation.ContractNegotiationStates.REQUESTED;
+import static org.eclipse.edc.protocol.dsp.spi.version.DspVersions.V_2024_1;
 
 @EndToEndTest
 public class DspNegotiationApiEndToEndTest {
@@ -46,9 +46,9 @@ public class DspNegotiationApiEndToEndTest {
                     "web.http.protocol.path", "/protocol",
                     "web.http.protocol.port", String.valueOf(PROTOCOL_PORT)
             ),
-            ":data-protocols:dsp:dsp-negotiation:dsp-negotiation-api",
+            ":data-protocols:dsp:dsp-negotiation:dsp-negotiation-http-api",
             ":data-protocols:dsp:dsp-negotiation:dsp-negotiation-transform",
-            ":data-protocols:dsp:dsp-api-configuration",
+            ":data-protocols:dsp:dsp-http-api-configuration",
             ":data-protocols:dsp:dsp-http-core",
             ":extensions:common:iam:iam-mock",
             ":core:control-plane:control-plane-aggregate-services",

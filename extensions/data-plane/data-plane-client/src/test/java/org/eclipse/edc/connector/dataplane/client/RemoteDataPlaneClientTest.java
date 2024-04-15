@@ -19,8 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.edc.connector.dataplane.selector.spi.client.DataPlaneClient;
 import org.eclipse.edc.connector.dataplane.selector.spi.instance.DataPlaneInstance;
 import org.eclipse.edc.connector.dataplane.spi.response.TransferErrorResponse;
+import org.eclipse.edc.json.JacksonTypeManager;
 import org.eclipse.edc.spi.response.ResponseStatus;
-import org.eclipse.edc.spi.types.TypeManager;
 import org.eclipse.edc.spi.types.domain.DataAddress;
 import org.eclipse.edc.spi.types.domain.transfer.DataFlowStartMessage;
 import org.junit.jupiter.api.AfterAll;
@@ -39,9 +39,9 @@ import java.util.UUID;
 
 import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.eclipse.edc.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.eclipse.edc.junit.assertions.AbstractResultAssert.assertThat;
 import static org.eclipse.edc.util.io.Ports.getFreePort;
-import static org.eclipse.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
 import static org.mockserver.matchers.Times.once;
 import static org.mockserver.model.HttpResponse.response;
@@ -51,7 +51,7 @@ import static org.mockserver.stop.Stop.stopQuietly;
 
 class RemoteDataPlaneClientTest {
 
-    private static final ObjectMapper MAPPER = new TypeManager().getMapper();
+    private static final ObjectMapper MAPPER = new JacksonTypeManager().getMapper();
 
     private static final int DATA_PLANE_API_PORT = getFreePort();
     private static final String DATA_PLANE_PATH = "/transfer";

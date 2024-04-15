@@ -14,21 +14,23 @@
 
 package org.eclipse.edc.test.e2e.managementapi;
 
-import org.eclipse.edc.connector.contract.spi.offer.store.ContractDefinitionStore;
-import org.eclipse.edc.connector.contract.spi.types.offer.ContractDefinition;
-import org.eclipse.edc.connector.policy.spi.PolicyDefinition;
-import org.eclipse.edc.connector.policy.spi.store.PolicyDefinitionStore;
+import org.eclipse.edc.connector.controlplane.asset.spi.domain.Asset;
+import org.eclipse.edc.connector.controlplane.asset.spi.index.AssetIndex;
+import org.eclipse.edc.connector.controlplane.contract.spi.offer.store.ContractDefinitionStore;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.offer.ContractDefinition;
+import org.eclipse.edc.connector.controlplane.policy.spi.PolicyDefinition;
+import org.eclipse.edc.connector.controlplane.policy.spi.store.PolicyDefinitionStore;
+import org.eclipse.edc.connector.dataplane.selector.spi.instance.DataPlaneInstance;
+import org.eclipse.edc.connector.dataplane.selector.spi.store.DataPlaneInstanceStore;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.annotations.PostgresqlIntegrationTest;
 import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
 import org.eclipse.edc.policy.model.Policy;
-import org.eclipse.edc.spi.asset.AssetIndex;
 import org.eclipse.edc.spi.types.domain.DataAddress;
-import org.eclipse.edc.spi.types.domain.asset.Asset;
-import org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.UUID;
 
@@ -38,15 +40,22 @@ import static jakarta.json.Json.createObjectBuilder;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.CONTEXT;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.ID;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.TYPE;
-import static org.eclipse.edc.spi.CoreConstants.EDC_NAMESPACE;
-import static org.eclipse.edc.spi.CoreConstants.EDC_PREFIX;
+import static org.eclipse.edc.spi.constants.CoreConstants.EDC_NAMESPACE;
+import static org.eclipse.edc.spi.constants.CoreConstants.EDC_PREFIX;
+import static org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance.createDatabase;
+import static org.eclipse.edc.test.e2e.managementapi.Runtimes.inMemoryRuntime;
+import static org.eclipse.edc.test.e2e.managementapi.Runtimes.postgresRuntime;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.is;
 
 public class CatalogApiEndToEndTest {
 
     @Nested
     @EndToEndTest
-    class InMemory extends Tests implements InMemoryRuntime {
+    class InMemory extends Tests {
+
+        @RegisterExtension
+        public static final EdcRuntimeExtension RUNTIME = inMemoryRuntime();
 
         InMemory() {
             super(RUNTIME);
@@ -56,17 +65,17 @@ public class CatalogApiEndToEndTest {
 
     @Nested
     @PostgresqlIntegrationTest
-    class Postgres extends Tests implements PostgresRuntime {
+    class Postgres extends Tests {
+
+        @RegisterExtension
+        static final BeforeAllCallback CREATE_DATABASE = context -> createDatabase("runtime");
+
+        @RegisterExtension
+        public static final EdcRuntimeExtension RUNTIME = postgresRuntime();
 
         Postgres() {
             super(RUNTIME);
         }
-
-        @BeforeAll
-        static void beforeAll() {
-            PostgresqlEndToEndInstance.createDatabase("runtime");
-        }
-
     }
 
     abstract static class Tests extends ManagementApiEndToEndTestBase {
@@ -91,7 +100,7 @@ public class CatalogApiEndToEndTest {
                     .body(requestBody)
                     .post("/v2/catalog/request")
                     .then()
-                    .log().ifError()
+                    .log().ifValidationFails()
                     .statusCode(200)
                     .contentType(JSON)
                     .body(TYPE, is("dcat:Catalog"));
@@ -117,8 +126,8 @@ public class CatalogApiEndToEndTest {
             policyDefinitionStore.create(PolicyDefinition.Builder.newInstance().id(policyId).policy(policy).build());
             contractDefinitionStore.save(cd);
 
-            assetIndex.create(createAsset("id-1").build());
-            assetIndex.create(createAsset("id-2").build());
+            assetIndex.create(createAsset("id-1", "test-type").build());
+            assetIndex.create(createAsset("id-2", "test-type").build());
 
             var criteria = createArrayBuilder()
                     .add(createObjectBuilder()
@@ -156,8 +165,12 @@ public class CatalogApiEndToEndTest {
 
         @Test
         void getDataset_shouldReturnDataset() {
+            var dataPlaneInstance = DataPlaneInstance.Builder.newInstance().url("http://localhost/any")
+                    .allowedDestType("any").allowedSourceType("test-type").allowedTransferType("any").build();
+            runtime.getContext().getService(DataPlaneInstanceStore.class).create(dataPlaneInstance);
+
             var assetIndex = runtime.getContext().getService(AssetIndex.class);
-            assetIndex.create(createAsset("asset-id").build());
+            assetIndex.create(createAsset("asset-id", "test-type").build());
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder().add(EDC_PREFIX, EDC_NAMESPACE))
                     .add(TYPE, "DatasetRequest")
@@ -171,15 +184,17 @@ public class CatalogApiEndToEndTest {
                     .body(requestBody)
                     .post("/v2/catalog/dataset/request")
                     .then()
+                    .log().ifValidationFails()
                     .statusCode(200)
                     .contentType(JSON)
                     .body(ID, is("asset-id"))
-                    .body(TYPE, is("dcat:Dataset"));
+                    .body(TYPE, is("dcat:Dataset"))
+                    .body("'dcat:distribution'.'dcat:accessService'.@id", notNullValue());
         }
 
-        private Asset.Builder createAsset(String id) {
+        private Asset.Builder createAsset(String id, String sourceType) {
             return Asset.Builder.newInstance()
-                    .dataAddress(DataAddress.Builder.newInstance().type("test-type").build())
+                    .dataAddress(DataAddress.Builder.newInstance().type(sourceType).build())
                     .id(id);
         }
 

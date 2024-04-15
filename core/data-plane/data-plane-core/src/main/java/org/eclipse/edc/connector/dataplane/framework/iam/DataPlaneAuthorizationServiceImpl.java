@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static java.util.stream.Collectors.toMap;
-import static org.eclipse.edc.spi.CoreConstants.EDC_NAMESPACE;
+import static org.eclipse.edc.spi.constants.CoreConstants.EDC_NAMESPACE;
 import static org.eclipse.edc.spi.result.Result.success;
 
 public class DataPlaneAuthorizationServiceImpl implements DataPlaneAuthorizationService {
@@ -79,7 +79,7 @@ public class DataPlaneAuthorizationServiceImpl implements DataPlaneAuthorization
         var accessTokenDataResult = accessTokenService.resolve(token);
 
         return accessTokenDataResult
-                .compose(atd -> accessControlService.checkAccess(atd.claimToken(), atd.dataAddress(), atd.additionalProperties(), requestData))
+                .compose(atd -> accessControlService.checkAccess(atd.claimToken(), atd.dataAddress(), requestData, atd.additionalProperties()))
                 .map(u -> accessTokenDataResult.getContent().dataAddress());
     }
 

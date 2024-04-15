@@ -26,15 +26,15 @@ import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okio.Buffer;
-import org.eclipse.edc.identitytrust.model.CredentialFormat;
-import org.eclipse.edc.identitytrust.model.CredentialSubject;
-import org.eclipse.edc.identitytrust.model.Issuer;
-import org.eclipse.edc.identitytrust.model.VerifiableCredential;
-import org.eclipse.edc.identitytrust.model.VerifiablePresentation;
-import org.eclipse.edc.identitytrust.model.credentialservice.PresentationResponseMessage;
+import org.eclipse.edc.http.spi.EdcHttpClient;
+import org.eclipse.edc.iam.identitytrust.spi.model.PresentationResponseMessage;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.CredentialFormat;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.CredentialSubject;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.Issuer;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.VerifiableCredential;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.VerifiablePresentation;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
-import org.eclipse.edc.spi.http.EdcHttpClient;
 import org.eclipse.edc.spi.result.Result;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,9 +68,9 @@ class DefaultCredentialServiceClientTest {
     public static final String PRESENTATION_QUERY = "/presentations/query";
     private static final String CS_URL = "http://test.com/cs";
     private final EdcHttpClient httpClientMock = mock();
+    private final ObjectMapper mapper = JacksonJsonLd.createObjectMapper().enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
     private DefaultCredentialServiceClient client;
     private TypeTransformerRegistry transformerRegistry;
-    private ObjectMapper mapper = JacksonJsonLd.createObjectMapper().enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
 
     @BeforeEach
     void setup() {
@@ -88,7 +88,7 @@ class DefaultCredentialServiceClientTest {
     @Test
     @DisplayName("CS send scopes")
     void requestPresentation_sendScopes() throws IOException {
-        
+
         when(httpClientMock.execute(any()))
                 .thenReturn(response(200, getResourceFileContentAsString("single_ldp-vp.json")));
 

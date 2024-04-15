@@ -17,14 +17,14 @@ package org.eclipse.edc.iam.identitytrust.transform.to;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.json.JsonObject;
-import org.eclipse.edc.core.transform.TransformerContextImpl;
-import org.eclipse.edc.core.transform.TypeTransformerRegistryImpl;
-import org.eclipse.edc.core.transform.transformer.edc.to.JsonValueToGenericTypeTransformer;
-import org.eclipse.edc.identitytrust.model.Issuer;
+import org.eclipse.edc.iam.verifiablecredentials.spi.model.Issuer;
 import org.eclipse.edc.jsonld.TitaniumJsonLd;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
+import org.eclipse.edc.transform.TransformerContextImpl;
+import org.eclipse.edc.transform.TypeTransformerRegistryImpl;
 import org.eclipse.edc.transform.spi.TransformerContext;
+import org.eclipse.edc.transform.transformer.edc.to.JsonValueToGenericTypeTransformer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -33,6 +33,7 @@ import java.net.URISyntaxException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.edc.iam.identitytrust.transform.TestData.EXAMPLE_VC_JSONLD;
 import static org.eclipse.edc.iam.identitytrust.transform.TestData.EXAMPLE_VC_JSONLD_ISSUER_IS_URL;
+import static org.eclipse.edc.iam.identitytrust.transform.TestData.EXAMPLE_VC_SUB_IS_ARRAY_JSONLD;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -67,6 +68,23 @@ class JsonObjectToVerifiableCredentialTransformerTest {
 
         assertThat(vc).isNotNull();
         assertThat(vc.getCredentialSubject()).isNotNull().hasSize(1);
+        assertThat(vc.getType()).hasSize(2);
+        assertThat(vc.getDescription()).isNotNull();
+        assertThat(vc.getName()).isNotNull();
+        assertThat(vc.getCredentialStatus()).isNotNull();
+        assertThat(vc.getIssuer()).isNotNull().extracting(Issuer::id).isEqualTo("https://university.example/issuers/565049");
+        verify(context, never()).reportProblem(anyString());
+    }
+
+    @Test
+    void transform_credentialSubjectIsArray() throws JsonProcessingException {
+
+        var jsonObj = OBJECT_MAPPER.readValue(EXAMPLE_VC_SUB_IS_ARRAY_JSONLD, JsonObject.class);
+        var vc = transformer.transform(jsonLdService.expand(jsonObj).getContent(), context);
+
+        assertThat(vc).isNotNull();
+        assertThat(vc.getCredentialSubject()).isNotNull().hasSize(2);
+        assertThat(vc.getCredentialStatus()).hasSize(2);
         assertThat(vc.getType()).hasSize(2);
         assertThat(vc.getDescription()).isNotNull();
         assertThat(vc.getName()).isNotNull();

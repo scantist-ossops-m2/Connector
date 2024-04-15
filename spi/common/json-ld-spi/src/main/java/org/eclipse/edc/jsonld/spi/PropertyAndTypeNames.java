@@ -18,7 +18,7 @@ import static org.eclipse.edc.jsonld.spi.Namespaces.DCAT_SCHEMA;
 import static org.eclipse.edc.jsonld.spi.Namespaces.DCT_SCHEMA;
 import static org.eclipse.edc.jsonld.spi.Namespaces.DSPACE_SCHEMA;
 import static org.eclipse.edc.policy.model.OdrlNamespace.ODRL_SCHEMA;
-import static org.eclipse.edc.spi.CoreConstants.EDC_NAMESPACE;
+import static org.eclipse.edc.spi.constants.CoreConstants.EDC_NAMESPACE;
 
 /**
  * Collection of DCAT, DCT and ODRL type and attribute names.
@@ -69,6 +69,7 @@ public interface PropertyAndTypeNames {
     String ODRL_RIGHT_OPERAND_ATTRIBUTE = ODRL_SCHEMA + "rightOperand";
     String ODRL_DUTY_ATTRIBUTE = ODRL_SCHEMA + "duty";
     String ODRL_AND_CONSTRAINT_ATTRIBUTE = ODRL_SCHEMA + "and";
+    String ODRL_AND_SEQUENCE_CONSTRAINT_ATTRIBUTE = ODRL_SCHEMA + "andSequence";
     String ODRL_OR_CONSTRAINT_ATTRIBUTE = ODRL_SCHEMA + "or";
     String ODRL_XONE_CONSTRAINT_ATTRIBUTE = ODRL_SCHEMA + "xone";
     String ODRL_USE_ACTION_ATTRIBUTE = ODRL_SCHEMA + "use";
