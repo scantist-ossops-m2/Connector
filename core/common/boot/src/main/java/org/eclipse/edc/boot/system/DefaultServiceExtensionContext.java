@@ -18,31 +18,32 @@ package org.eclipse.edc.boot.system;
 import org.eclipse.edc.boot.BootServicesExtension;
 import org.eclipse.edc.spi.EdcException;
 import org.eclipse.edc.spi.monitor.Monitor;
-import org.eclipse.edc.spi.system.ConfigurationExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.system.configuration.Config;
-import org.eclipse.edc.spi.system.configuration.ConfigFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
+
+import static org.eclipse.edc.boot.BootServicesExtension.RUNTIME_ID;
 
 /**
  * Base service extension context.
  * <p>Prior to using, {@link #initialize()} must be called.</p>
  */
 public class DefaultServiceExtensionContext implements ServiceExtensionContext {
+
+    @Deprecated(since = "0.6.2")
+    private static final String EDC_CONNECTOR_NAME = "edc.connector.name";
+
     private final Map<Class<?>, Object> services = new HashMap<>();
-    private final List<ConfigurationExtension> configurationExtensions;
+    private final Config config;
     private boolean isReadOnly = false;
     private String participantId;
-    private String connectorId;
-    private Config config;
+    private String runtimeId;
 
-    public DefaultServiceExtensionContext(Monitor monitor, List<ConfigurationExtension> configurationExtensions) {
-        this.configurationExtensions = configurationExtensions;
+    public DefaultServiceExtensionContext(Monitor monitor, Config config) {
+        this.config = config;
         // register as service
         registerService(Monitor.class, monitor);
     }
@@ -63,8 +64,8 @@ public class DefaultServiceExtensionContext implements ServiceExtensionContext {
     }
 
     @Override
-    public String getConnectorId() {
-        return connectorId;
+    public String getRuntimeId() {
+        return runtimeId;
     }
 
     @Override
@@ -102,33 +103,27 @@ public class DefaultServiceExtensionContext implements ServiceExtensionContext {
 
     @Override
     public void initialize() {
-        configurationExtensions.forEach(ext -> {
-            ext.initialize(getMonitor());
-            getMonitor().info("Initialized " + ext.name());
-        });
-        config = loadConfig();
-        connectorId = getSetting("edc.connector.name", "edc-" + UUID.randomUUID());
         participantId = getSetting(BootServicesExtension.PARTICIPANT_ID, ANONYMOUS_PARTICIPANT);
         if (ANONYMOUS_PARTICIPANT.equals(participantId)) {
             getMonitor().warning("The runtime is configured as an anonymous participant. DO NOT DO THIS IN PRODUCTION.");
         }
+
+        var connectorName = getSetting(EDC_CONNECTOR_NAME, null);
+        if (connectorName != null) {
+            getMonitor().warning("Setting %s has been deprecated, please use %s instead".formatted(EDC_CONNECTOR_NAME, RUNTIME_ID));
+        }
+
+        runtimeId = getSetting(RUNTIME_ID, null);
+        if (runtimeId == null) {
+            if (connectorName == null) {
+                getMonitor().warning("%s is not configured so a random UUID is used. It is recommended to provide a static one.".formatted(RUNTIME_ID));
+                runtimeId = UUID.randomUUID().toString();
+            } else {
+                getMonitor().warning("%s is not configured and it will fallback to the deprecated %s value".formatted(RUNTIME_ID, EDC_CONNECTOR_NAME));
+                runtimeId = connectorName;
+            }
+        }
+
     }
 
-    // this method exists so that getting env vars can be mocked during testing
-    protected Map<String, String> getEnvironmentVariables() {
-        return System.getenv();
-    }
-
-    private Config loadConfig() {
-        var config = configurationExtensions.stream()
-                .map(ConfigurationExtension::getConfig)
-                .filter(Objects::nonNull)
-                .reduce(Config::merge)
-                .orElse(ConfigFactory.empty());
-
-        var environmentConfig = ConfigFactory.fromEnvironment(getEnvironmentVariables());
-        var systemPropertyConfig = ConfigFactory.fromProperties(System.getProperties());
-
-        return config.merge(environmentConfig).merge(systemPropertyConfig);
-    }
 }
