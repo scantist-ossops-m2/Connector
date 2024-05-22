@@ -51,7 +51,6 @@ import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.ID;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.TYPE;
 import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.VALUE;
 import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_ACTION_ATTRIBUTE;
-import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_ACTION_TYPE_ATTRIBUTE;
 import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_AND_CONSTRAINT_ATTRIBUTE;
 import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_ASSIGNEE_ATTRIBUTE;
 import static org.eclipse.edc.jsonld.spi.PropertyAndTypeNames.ODRL_ASSIGNER_ATTRIBUTE;
@@ -176,12 +175,12 @@ class JsonObjectFromPolicyTransformerTest {
         assertThat(permissionJson.getJsonObject(ODRL_ACTION_ATTRIBUTE)).isNotNull();
 
         var actionJson = permissionJson.getJsonObject(ODRL_ACTION_ATTRIBUTE);
-        assertThat(actionJson.getJsonString(ODRL_ACTION_TYPE_ATTRIBUTE).getString()).isEqualTo(action.getType());
+        assertThat(actionJson.getJsonObject(ODRL_ACTION_ATTRIBUTE).getString(ID)).isEqualTo(action.getType());
         assertThat(actionJson.getJsonString(ODRL_INCLUDED_IN_ATTRIBUTE).getString()).isEqualTo(action.getIncludedIn());
         assertThat(actionJson.getJsonObject(ODRL_REFINEMENT_ATTRIBUTE)).isNotNull();
 
         var constraintJson = actionJson.getJsonObject(ODRL_REFINEMENT_ATTRIBUTE);
-        assertThat(constraintJson.getJsonObject(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonString(VALUE).getString())
+        assertThat(constraintJson.getJsonArray(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(((LiteralExpression) constraint.getLeftExpression()).getValue());
         assertThat(constraintJson.getJsonArray(ODRL_OPERATOR_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(constraint.getOperator().getOdrlRepresentation());
@@ -221,7 +220,7 @@ class JsonObjectFromPolicyTransformerTest {
         assertThat(permissionJson.getJsonArray(ODRL_DUTY_ATTRIBUTE)).hasSize(1);
 
         var constraintJson = permissionJson.getJsonArray(ODRL_CONSTRAINT_ATTRIBUTE).get(0).asJsonObject();
-        assertThat(constraintJson.getJsonObject(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonString(VALUE).getString())
+        assertThat(constraintJson.getJsonArray(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(((LiteralExpression) constraint.getLeftExpression()).getValue());
         assertThat(constraintJson.getJsonArray(ODRL_OPERATOR_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(constraint.getOperator().getOdrlRepresentation());
@@ -253,7 +252,7 @@ class JsonObjectFromPolicyTransformerTest {
         assertThat(prohibitionJson.getJsonArray(ODRL_CONSTRAINT_ATTRIBUTE)).hasSize(1);
 
         var constraintJson = prohibitionJson.getJsonArray(ODRL_CONSTRAINT_ATTRIBUTE).get(0).asJsonObject();
-        assertThat(constraintJson.getJsonObject(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonString(VALUE).getString())
+        assertThat(constraintJson.getJsonArray(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(((LiteralExpression) constraint.getLeftExpression()).getValue());
         assertThat(constraintJson.getJsonArray(ODRL_OPERATOR_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(constraint.getOperator().getOdrlRepresentation());
@@ -262,7 +261,7 @@ class JsonObjectFromPolicyTransformerTest {
 
         assertThat(prohibitionJson.getJsonArray(ODRL_REMEDY_ATTRIBUTE)).hasSize(1).first()
                 .extracting(JsonValue::asJsonObject).satisfies(remedyJson -> {
-                    assertThat(remedyJson.getJsonObject(ODRL_ACTION_ATTRIBUTE).getString(ODRL_ACTION_TYPE_ATTRIBUTE))
+                    assertThat(remedyJson.getJsonObject(ODRL_ACTION_ATTRIBUTE).getString(ID))
                             .isEqualTo("remedyAction");
                 });
 
@@ -289,7 +288,7 @@ class JsonObjectFromPolicyTransformerTest {
         assertThat(dutyJson.getJsonArray(ODRL_CONSTRAINT_ATTRIBUTE)).hasSize(1);
 
         var constraintJson = dutyJson.getJsonArray(ODRL_CONSTRAINT_ATTRIBUTE).get(0).asJsonObject();
-        assertThat(constraintJson.getJsonObject(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonString(VALUE).getString())
+        assertThat(constraintJson.getJsonArray(ODRL_LEFT_OPERAND_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(((LiteralExpression) constraint.getLeftExpression()).getValue());
         assertThat(constraintJson.getJsonArray(ODRL_OPERATOR_ATTRIBUTE).getJsonObject(0).getString(ID))
                 .isEqualTo(constraint.getOperator().getOdrlRepresentation());

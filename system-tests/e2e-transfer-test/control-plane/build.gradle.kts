@@ -20,7 +20,6 @@ dependencies {
     implementation(project(":core:common:token-core"))
     implementation(project(":core:control-plane:control-plane-core"))
     implementation(project(":data-protocols:dsp"))
-    implementation(project(":extensions:common:vault:vault-filesystem"))
     implementation(project(":extensions:common:http"))
     implementation(project(":extensions:common:iam:iam-mock"))
     implementation(project(":extensions:control-plane:api:control-plane-api"))
@@ -28,6 +27,7 @@ dependencies {
 
     implementation(project(":core:data-plane-selector:data-plane-selector-core"))
     implementation(project(":extensions:data-plane-selector:data-plane-selector-api"))
+    implementation(project(":extensions:data-plane-selector:data-plane-selector-control-api"))
 
     implementation(project(":extensions:control-plane:provision:provision-http"))
     implementation(project(":extensions:control-plane:transfer:transfer-pull-http-receiver"))

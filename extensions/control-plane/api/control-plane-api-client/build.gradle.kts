@@ -17,6 +17,7 @@ plugins {
 }
 
 dependencies {
+    api(project(":spi:common:auth-spi"))
     api(project(":spi:common:http-spi"))
     api(project(":spi:control-plane:control-plane-api-client-spi"))
 
@@ -29,6 +30,7 @@ dependencies {
     testImplementation(project(":core:data-plane-selector:data-plane-selector-core"))
     testImplementation(project(":extensions:control-plane:api:control-plane-api"))
     testImplementation(project(":extensions:common:auth:auth-tokenbased"))
+    testImplementation(project(":extensions:common:json-ld"))
     testImplementation(libs.awaitility)
 
     testImplementation(testFixtures(project(":core:common:lib:http-lib")))

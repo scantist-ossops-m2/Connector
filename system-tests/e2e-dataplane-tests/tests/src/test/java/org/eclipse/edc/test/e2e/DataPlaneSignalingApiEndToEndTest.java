@@ -75,13 +75,14 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
     @DisplayName("Verify the POST /v1/dataflows endpoint returns the correct EDR")
     @Test
     void startTransfer() throws JsonProcessingException {
+        seedVault();
         var jsonLd = runtime.getContext().getService(JsonLd.class);
 
         var processId = "test-processId";
         var flowMessage = createStartMessage(processId);
         var startMessage = registry.transform(flowMessage, JsonObject.class).orElseThrow(failTest());
 
-        var resultJson = DATAPLANE.getDataPlaneSignalingEndpoint()
+        var resultJson = DATAPLANE.getDataPlaneControlEndpoint()
                 .baseRequest()
                 .contentType(ContentType.JSON)
                 .body(startMessage)
@@ -89,6 +90,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
                 .then()
                 .body(Matchers.notNullValue())
                 .statusCode(200)
+                .log().ifError()
                 .extract().body().asString();
 
         var dataFlowResponseMessage = jsonLd.expand(mapper.readValue(resultJson, JsonObject.class))
@@ -113,6 +115,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
     @DisplayName("Verify that GET /v1/dataflows/{id}/state returns the correct state")
     @Test
     void getState() {
+        seedVault();
         var dataFlowId = "test-flowId";
 
         var flow = DataFlow.Builder.newInstance()
@@ -121,7 +124,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
                 .build();
         runtime.getService(DataPlaneStore.class).save(flow);
 
-        var resultJson = DATAPLANE.getDataPlaneSignalingEndpoint()
+        var resultJson = DATAPLANE.getDataPlaneControlEndpoint()
                 .baseRequest()
                 .contentType(ContentType.JSON)
                 .get("/v1/dataflows/%s/state".formatted(dataFlowId))
@@ -136,6 +139,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
     @DisplayName("Verify that POST /v1/dataflows/{id}/terminate terminates the flow, with an optional message")
     @Test
     void terminate() {
+        seedVault();
         var dataFlowId = "test-flowId";
 
         var flow = DataFlow.Builder.newInstance()
@@ -153,7 +157,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
                 .add(DATA_FLOW_TERMINATE_MESSAGE_REASON, "test-reason")
                 .build();
 
-        DATAPLANE.getDataPlaneSignalingEndpoint()
+        DATAPLANE.getDataPlaneControlEndpoint()
                 .baseRequest()
                 .body(terminateMessage)
                 .contentType(ContentType.JSON)
@@ -168,6 +172,7 @@ public class DataPlaneSignalingApiEndToEndTest extends AbstractDataPlaneTest {
                 .isEqualTo(DataFlowStates.TERMINATED.code());
 
     }
+
 
     private DataFlowStartMessage createStartMessage(String processId) {
         return DataFlowStartMessage.Builder.newInstance()

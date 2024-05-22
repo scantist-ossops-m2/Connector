@@ -40,7 +40,6 @@ class JsonObjectToSelectionRequestTransformerTest {
     private final JsonObjectToSelectionRequestTransformer transformer = new JsonObjectToSelectionRequestTransformer();
     private final TransformerContext context = mock();
 
-
     @BeforeEach
     void setUp() {
         when(context.transform(isA(JsonObject.class), eq(DataAddress.class))).thenReturn(DataAddress.Builder.newInstance().type("test-type").build());

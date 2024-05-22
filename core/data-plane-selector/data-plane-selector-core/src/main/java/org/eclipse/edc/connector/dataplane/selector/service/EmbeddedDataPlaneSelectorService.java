@@ -22,8 +22,10 @@ import org.eclipse.edc.spi.result.ServiceResult;
 import org.eclipse.edc.spi.result.StoreResult;
 import org.eclipse.edc.spi.types.domain.DataAddress;
 import org.eclipse.edc.transaction.spi.TransactionContext;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 
 public class EmbeddedDataPlaneSelectorService implements DataPlaneSelectorService {
 
@@ -38,25 +40,30 @@ public class EmbeddedDataPlaneSelectorService implements DataPlaneSelectorServic
     }
 
     @Override
-    public List<DataPlaneInstance> getAll() {
+    public ServiceResult<List<DataPlaneInstance>> getAll() {
         return transactionContext.execute(() -> {
             try (var stream = store.getAll()) {
-                return stream.toList();
+                return ServiceResult.success(stream.toList());
             }
         });
     }
 
     @Override
-    public DataPlaneInstance select(DataAddress source, DataAddress destination, String selectionStrategy, String transferType) {
-        var strategy = selectionStrategyRegistry.find(selectionStrategy);
+    public ServiceResult<DataPlaneInstance> select(DataAddress source, String transferType, @Nullable String selectionStrategy) {
+        var sanitizedSelectionStrategy = Optional.ofNullable(selectionStrategy).orElse(DEFAULT_STRATEGY);
+        var strategy = selectionStrategyRegistry.find(sanitizedSelectionStrategy);
         if (strategy == null) {
-            throw new IllegalArgumentException("Strategy " + selectionStrategy + " was not found");
+            return ServiceResult.badRequest("Strategy " + sanitizedSelectionStrategy + " was not found");
         }
 
         return transactionContext.execute(() -> {
             try (var stream = store.getAll()) {
-                var dataPlanes = stream.filter(dataPlane -> dataPlane.canHandle(source, destination, transferType)).toList();
-                return strategy.apply(dataPlanes);
+                var dataPlanes = stream.filter(dataPlane -> dataPlane.canHandle(source, transferType)).toList();
+                var dataPlane = strategy.apply(dataPlanes);
+                if (dataPlane == null) {
+                    return ServiceResult.notFound("DataPlane not found");
+                }
+                return ServiceResult.success(dataPlane);
             }
         });
     }
@@ -73,5 +80,10 @@ public class EmbeddedDataPlaneSelectorService implements DataPlaneSelectorServic
             }
             return ServiceResult.from(result);
         });
+    }
+
+    @Override
+    public ServiceResult<Void> delete(String instanceId) {
+        return transactionContext.execute(() -> ServiceResult.from(store.deleteById(instanceId))).mapEmpty();
     }
 }

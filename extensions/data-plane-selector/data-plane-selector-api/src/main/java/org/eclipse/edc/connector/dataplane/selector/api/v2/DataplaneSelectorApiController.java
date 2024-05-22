@@ -37,7 +37,6 @@ import java.time.Clock;
 import java.util.function.Supplier;
 
 import static jakarta.json.stream.JsonCollectors.toJsonArray;
-import static java.util.Optional.ofNullable;
 import static org.eclipse.edc.connector.dataplane.selector.spi.instance.DataPlaneInstance.DATAPLANE_INSTANCE_TYPE;
 import static org.eclipse.edc.web.spi.exception.ServiceResultHandler.exceptionMapper;
 
@@ -67,14 +66,12 @@ public class DataplaneSelectorApiController implements DataplaneSelectorApi {
         var request = transformerRegistry.transform(requestObject, SelectionRequest.class)
                 .orElseThrow(InvalidRequestException::new);
 
-        var dpi = ofNullable(request.getStrategy())
-                .map(strategy -> catchException(() -> selectionService.select(request.getSource(), request.getDestination(), strategy, request.getTransferType())))
-                .orElseGet(() -> catchException(() -> selectionService.select(request.getSource(), request.getDestination())));
+        var selection = selectionService.select(request.getSource(), request.getTransferType(), request.getStrategy());
 
-        if (dpi == null) {
+        if (selection.failed()) {
             return null;
         }
-        return transformerRegistry.transform(dpi, JsonObject.class)
+        return transformerRegistry.transform(selection.getContent(), JsonObject.class)
                 .orElseThrow(f -> new EdcException(f.getFailureDetail()));
     }
 
@@ -101,7 +98,7 @@ public class DataplaneSelectorApiController implements DataplaneSelectorApi {
     @Override
     @GET
     public JsonArray getAllDataPlaneInstances() {
-        var instances = selectionService.getAll();
+        var instances = selectionService.getAll().orElseThrow(exceptionMapper(DataPlaneInstance.class));
         return instances.stream()
                 .map(i -> transformerRegistry.transform(i, JsonObject.class))
                 .filter(Result::succeeded)

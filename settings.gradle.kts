@@ -148,7 +148,6 @@ include(":extensions:common:transaction:transaction-atomikos")
 include(":extensions:common:transaction:transaction-local")
 include(":extensions:common:validator:validator-data-address-http-data")
 include(":extensions:common:validator:validator-data-address-kafka")
-include(":extensions:common:vault:vault-filesystem")
 include(":extensions:common:vault:vault-hashicorp")
 include(":extensions:common:store:sql:edr-index-sql")
 
@@ -190,6 +189,7 @@ include(":extensions:control-plane:edr:edr-store-receiver")
 include(":extensions:data-plane:data-plane-client")
 include(":extensions:data-plane:data-plane-client-embedded")
 include(":extensions:data-plane:data-plane-control-api")
+include(":extensions:data-plane:data-plane-self-registration")
 include(":extensions:data-plane:data-plane-signaling:data-plane-signaling-api")
 include(":extensions:data-plane:data-plane-signaling:data-plane-signaling-api-configuration")
 include(":extensions:data-plane:data-plane-signaling:data-plane-signaling-client")
@@ -207,13 +207,13 @@ include(":extensions:data-plane:data-plane-kafka")
 
 include(":extensions:data-plane-selector:data-plane-selector-api")
 include(":extensions:data-plane-selector:data-plane-selector-client")
+include(":extensions:data-plane-selector:data-plane-selector-control-api")
 include(":extensions:data-plane-selector:store:sql:data-plane-instance-store-sql")
 
 include(":extensions:policy-monitor:store:sql:policy-monitor-store-sql")
 
 
 // modules for launchers, i.e. runnable compositions of the app ------------------------------------
-include(":launchers:data-plane-server")
 include(":launchers:dpf-selector")
 include(":launchers:sts-server")
 

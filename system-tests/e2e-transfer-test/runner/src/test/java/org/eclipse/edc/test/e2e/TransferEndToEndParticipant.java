@@ -47,7 +47,6 @@ public class TransferEndToEndParticipant extends Participant {
     private final URI controlPlaneControl = URI.create("http://localhost:" + getFreePort() + "/control");
     private final URI dataPlaneDefault = URI.create("http://localhost:" + getFreePort());
     private final URI dataPlaneControl = URI.create("http://localhost:" + getFreePort() + "/control");
-    private final URI dataPlaneSignaling = URI.create("http://localhost:" + getFreePort() + "/signaling");
     private final URI dataPlanePublic = URI.create("http://localhost:" + getFreePort() + "/public");
     private final URI backendService = URI.create("http://localhost:" + getFreePort());
 
@@ -72,9 +71,12 @@ public class TransferEndToEndParticipant extends Participant {
 
     /**
      * Register a data plane using with input transfer type using the data plane signaling API url
+     *
+     * @deprecated dataplane now can register itself.
      */
+    @Deprecated(since = "0.6.3")
     public void registerDataPlane(Set<String> transferTypes) {
-        registerDataPlane(dataPlaneSignaling + "/v1/dataflows", Set.of("HttpData", "HttpProvision", "Kafka"), Set.of("HttpData", "HttpProvision", "HttpProxy", "Kafka"), transferTypes);
+        registerDataPlane(dataPlaneControl + "/v1/dataflows", Set.of("HttpData", "HttpProvision", "Kafka"), Set.of("HttpData", "HttpProvision", "HttpProxy", "Kafka"), transferTypes);
     }
 
     /**
@@ -84,7 +86,9 @@ public class TransferEndToEndParticipant extends Participant {
      * @param sources       The allowed source types
      * @param destinations  The allowed destination types
      * @param transferTypes The allowed transfer types
+     * @deprecated dataplane now can register itself.
      */
+    @Deprecated(since = "0.6.3")
     public void registerDataPlane(String url, Set<String> sources, Set<String> destinations, Set<String> transferTypes) {
         var jsonObject = Json.createObjectBuilder()
                 .add(CONTEXT, createObjectBuilder().add(EDC_PREFIX, EDC_NAMESPACE))
@@ -154,8 +158,6 @@ public class TransferEndToEndParticipant extends Participant {
                 put("web.http.public.path", "/public");
                 put("web.http.control.port", String.valueOf(dataPlaneControl.getPort()));
                 put("web.http.control.path", dataPlaneControl.getPath());
-                put("web.http.signaling.port", String.valueOf(dataPlaneSignaling.getPort()));
-                put("web.http.signaling.path", dataPlaneSignaling.getPath());
                 put("edc.vault", resourceAbsolutePath(getName() + "-vault.properties"));
                 put("edc.keystore", resourceAbsolutePath("certs/cert.pfx"));
                 put("edc.keystore.password", "123456");
@@ -164,6 +166,7 @@ public class TransferEndToEndParticipant extends Participant {
                 put("edc.transfer.proxy.token.signer.privatekey.alias", "1");
                 put("edc.transfer.proxy.token.verifier.publickey.alias", "public-key");
                 put("edc.dataplane.http.sink.partition.size", "1");
+                put("edc.dpf.selector.url", controlPlaneControl + "/v1/dataplanes");
             }
         };
     }

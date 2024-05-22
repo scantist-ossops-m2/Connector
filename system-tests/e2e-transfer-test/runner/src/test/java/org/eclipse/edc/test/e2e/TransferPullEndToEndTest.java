@@ -28,6 +28,7 @@ import org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferProcess
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.annotations.PostgresqlIntegrationTest;
 import org.eclipse.edc.junit.extensions.EdcClassRuntimesExtension;
+import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
 import org.eclipse.edc.spi.event.EventEnvelope;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
@@ -72,55 +73,6 @@ import static org.mockserver.stop.Stop.stopQuietly;
 
 class TransferPullEndToEndTest {
 
-    @Nested
-    @EndToEndTest
-    class InMemory extends Tests {
-
-        @RegisterExtension
-        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
-                Runtimes.InMemory.controlPlane("consumer-control-plane", CONSUMER.controlPlaneConfiguration()),
-                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
-                Runtimes.InMemory.dataPlane("provider-data-plane", PROVIDER.dataPlaneConfiguration()),
-                Runtimes.InMemory.controlPlane("provider-control-plane", PROVIDER.controlPlaneConfiguration()),
-                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
-        );
-
-    }
-
-    @Nested
-    @EndToEndTest
-    class EmbeddedDataPlane extends Tests {
-
-        @RegisterExtension
-        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
-                Runtimes.InMemory.controlPlane("consumer-control-plane", CONSUMER.controlPlaneConfiguration()),
-                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
-                Runtimes.InMemory.controlPlaneEmbeddedDataPlane("provider-control-plane", PROVIDER.controlPlaneEmbeddedDataPlaneConfiguration()),
-                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
-        );
-
-    }
-
-    @Nested
-    @PostgresqlIntegrationTest
-    class Postgres extends Tests {
-
-        @RegisterExtension
-        static final BeforeAllCallback CREATE_DATABASES = context -> {
-            createDatabase(CONSUMER.getName());
-            createDatabase(PROVIDER.getName());
-        };
-
-        @RegisterExtension
-        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
-                Runtimes.Postgres.controlPlane("consumer-control-plane", CONSUMER.controlPlanePostgresConfiguration()),
-                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
-                Runtimes.Postgres.dataPlane("provider-data-plane", PROVIDER.dataPlanePostgresConfiguration()),
-                Runtimes.Postgres.controlPlane("provider-control-plane", PROVIDER.controlPlanePostgresConfiguration()),
-                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
-        );
-    }
-
     abstract static class Tests extends TransferEndToEndTestBase {
         private static final ObjectMapper MAPPER = new ObjectMapper();
         private static final String CALLBACK_PATH = "hooks";
@@ -129,7 +81,6 @@ class TransferPullEndToEndTest {
 
         @BeforeEach
         void beforeEach() {
-            registerDataPlanes();
             callbacksEndpoint = startClientAndServer(CALLBACK_PORT);
         }
 
@@ -140,6 +91,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void httpPull_dataTransfer_withCallbacks() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             createResourcesOnProvider(assetId, noConstraintPolicy(), httpDataAddressProperties());
             var dynamicReceiverProps = CONSUMER.dynamicReceiverPrivateProperties();
@@ -176,6 +128,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void httpPull_dataTransfer_withEdrCache() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             createResourcesOnProvider(assetId, PolicyFixtures.contractExpiresIn("10s"), httpDataAddressProperties());
             var dynamicReceiverProps = CONSUMER.dynamicReceiverPrivateProperties();
@@ -205,6 +158,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void suspendAndResume_httpPull_dataTransfer_withEdrCache() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             createResourcesOnProvider(assetId, noConstraintPolicy(), httpDataAddressProperties());
 
@@ -241,6 +195,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void pullFromHttp_httpProvision() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             createResourcesOnProvider(assetId, noConstraintPolicy(), Map.of(
                     "name", "transfer-test",
@@ -267,6 +222,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void shouldTerminateTransfer_whenContractExpires_fixedInForcePeriod() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             var now = Instant.now();
 
@@ -286,6 +242,7 @@ class TransferPullEndToEndTest {
 
         @Test
         void shouldTerminateTransfer_whenContractExpires_durationInForcePeriod() {
+            seedVaults();
             var assetId = UUID.randomUUID().toString();
             var now = Instant.now();
             // contract was valid from t-10d to t-5d, so "now" it is expired
@@ -301,13 +258,6 @@ class TransferPullEndToEndTest {
             });
         }
 
-        private void awaitTransferToBeInState(String transferProcessId, TransferProcessStates state) {
-            await().atMost(timeout).until(
-                    () -> CONSUMER.getTransferProcessState(transferProcessId),
-                    it -> Objects.equals(it, state.name())
-            );
-        }
-
         public JsonObject createCallback(String url, boolean transactional, Set<String> events) {
             return Json.createObjectBuilder()
                     .add(TYPE, EDC_NAMESPACE + "CallbackAddress")
@@ -318,6 +268,15 @@ class TransferPullEndToEndTest {
                             .collect(Json::createArrayBuilder, JsonArrayBuilder::add, JsonArrayBuilder::add)
                             .build())
                     .build();
+        }
+
+        protected abstract void seedVaults();
+
+        private void awaitTransferToBeInState(String transferProcessId, TransferProcessStates state) {
+            await().atMost(timeout).until(
+                    () -> CONSUMER.getTransferProcessState(transferProcessId),
+                    it -> Objects.equals(it, state.name())
+            );
         }
 
         @NotNull
@@ -351,6 +310,81 @@ class TransferPullEndToEndTest {
             return String.format("http://localhost:%d/%s", callbacksEndpoint.getLocalPort(), CALLBACK_PATH);
         }
 
+    }
+
+    @Nested
+    @EndToEndTest
+    class InMemory extends Tests {
+
+        private static final EdcRuntimeExtension CONSUMER_RUNTIME = Runtimes.InMemory.controlPlane("consumer-control-plane", CONSUMER.controlPlaneConfiguration());
+        private static final EdcRuntimeExtension PROVIDER_RUNTIME = Runtimes.InMemory.controlPlane("provider-control-plane", PROVIDER.controlPlaneConfiguration());
+        private static final EdcRuntimeExtension PROVIDER_DATAPLANE = Runtimes.InMemory.dataPlane("provider-data-plane", PROVIDER.dataPlaneConfiguration());
+        @RegisterExtension
+        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
+                CONSUMER_RUNTIME,
+                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
+                PROVIDER_RUNTIME,
+                PROVIDER_DATAPLANE,
+                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
+        );
+
+        @Override
+        protected void seedVaults() {
+            seedVault(CONSUMER_RUNTIME);
+            seedVault(PROVIDER_RUNTIME);
+            seedVault(PROVIDER_DATAPLANE);
+        }
+    }
+
+    @Nested
+    @EndToEndTest
+    class EmbeddedDataPlane extends Tests {
+
+        private static final EdcRuntimeExtension CONSUMER_RUNTIME = Runtimes.InMemory.controlPlane("consumer-control-plane", CONSUMER.controlPlaneConfiguration());
+        private static final EdcRuntimeExtension PROVIDER_RUNTIME = Runtimes.InMemory.controlPlaneEmbeddedDataPlane("provider-control-plane", PROVIDER.controlPlaneEmbeddedDataPlaneConfiguration());
+        @RegisterExtension
+        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
+                CONSUMER_RUNTIME,
+                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
+                PROVIDER_RUNTIME,
+                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
+        );
+
+        @Override
+        protected void seedVaults() {
+            seedVault(CONSUMER_RUNTIME);
+            seedVault(PROVIDER_RUNTIME);
+        }
+    }
+
+    @Nested
+    @PostgresqlIntegrationTest
+    class Postgres extends Tests {
+
+        @RegisterExtension
+        static final BeforeAllCallback CREATE_DATABASES = context -> {
+            createDatabase(CONSUMER.getName());
+            createDatabase(PROVIDER.getName());
+        };
+
+        private static final EdcRuntimeExtension CONSUMER_RUNTIME = Runtimes.Postgres.controlPlane("consumer-control-plane", CONSUMER.controlPlanePostgresConfiguration());
+        private static final EdcRuntimeExtension PROVIDER_RUNTIME = Runtimes.Postgres.controlPlane("provider-control-plane", PROVIDER.controlPlanePostgresConfiguration());
+        private static final EdcRuntimeExtension PROVIDER_DATAPLANE = Runtimes.Postgres.dataPlane("provider-data-plane", PROVIDER.dataPlanePostgresConfiguration());
+        @RegisterExtension
+        static final EdcClassRuntimesExtension RUNTIMES = new EdcClassRuntimesExtension(
+                CONSUMER_RUNTIME,
+                backendService("consumer-backend-service", CONSUMER.backendServiceConfiguration()),
+                PROVIDER_RUNTIME,
+                PROVIDER_DATAPLANE,
+                backendService("provider-backend-service", PROVIDER.backendServiceConfiguration())
+        );
+
+        @Override
+        protected void seedVaults() {
+            seedVault(CONSUMER_RUNTIME);
+            seedVault(PROVIDER_RUNTIME);
+            seedVault(PROVIDER_DATAPLANE);
+        }
     }
 
 }
