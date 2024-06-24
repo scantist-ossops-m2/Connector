@@ -30,7 +30,6 @@ import org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferRequest
 import org.eclipse.edc.jsonld.JsonLdExtension;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
-import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.transform.TypeTransformerRegistryImpl;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.eclipse.edc.transform.transformer.edc.to.JsonObjectToDataAddressTransformer;
@@ -40,13 +39,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.map;
-import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.TransferProcessApi.SuspendTransferSchema.SUSPEND_TRANSFER_EXAMPLE;
-import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.TransferProcessApi.TerminateTransferSchema.TERMINATE_TRANSFER_EXAMPLE;
-import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.TransferProcessApi.TransferProcessSchema.TRANSFER_PROCESS_EXAMPLE;
-import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.TransferProcessApi.TransferRequestSchema.TRANSFER_REQUEST_EXAMPLE;
-import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.TransferProcessApi.TransferStateSchema.TRANSFER_STATE_EXAMPLE;
 import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.model.TransferState.TRANSFER_STATE_STATE;
 import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.model.TransferState.TRANSFER_STATE_TYPE;
+import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3.SuspendTransferSchema.SUSPEND_TRANSFER_EXAMPLE;
+import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3.TerminateTransferSchema.TERMINATE_TRANSFER_EXAMPLE;
+import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3.TransferProcessSchema.TRANSFER_PROCESS_EXAMPLE;
+import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3.TransferRequestSchema.TRANSFER_REQUEST_EXAMPLE;
+import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3.TransferStateSchema.TRANSFER_STATE_EXAMPLE;
 import static org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferProcess.TRANSFER_PROCESS_ASSET_ID;
 import static org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferProcess.TRANSFER_PROCESS_CALLBACK_ADDRESSES;
 import static org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferProcess.TRANSFER_PROCESS_CONTRACT_ID;
@@ -84,7 +83,7 @@ class TransferProcessApiTest {
 
     @Test
     void transferRequestExample() throws JsonProcessingException {
-        var validator = TransferRequestValidator.instance(mock(Monitor.class));
+        var validator = TransferRequestValidator.instance(mock());
 
         var jsonObject = objectMapper.readValue(TRANSFER_REQUEST_EXAMPLE, JsonObject.class);
         assertThat(jsonObject).isNotNull();
@@ -98,7 +97,6 @@ class TransferProcessApiTest {
                             assertThat(transformed.getCounterPartyAddress()).isNotBlank();
                             assertThat(transformed.getContractId()).isNotBlank();
                             assertThat(transformed.getProtocol()).isNotBlank();
-                            assertThat(transformed.getAssetId()).isNotBlank();
                             assertThat(transformed.getDataDestination()).isNotNull();
                             assertThat(transformed.getPrivateProperties()).asInstanceOf(map(String.class, Object.class)).isNotEmpty();
                             assertThat(transformed.getCallbackAddresses()).asList().isNotEmpty();

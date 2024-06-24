@@ -23,7 +23,9 @@ import org.eclipse.edc.connector.controlplane.policy.spi.PolicyDefinition;
 import org.eclipse.edc.connector.controlplane.policy.spi.store.PolicyDefinitionStore;
 import org.eclipse.edc.connector.controlplane.services.spi.protocol.ProtocolVersionRegistry;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
-import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
+import org.eclipse.edc.junit.extensions.EmbeddedRuntime;
+import org.eclipse.edc.junit.extensions.RuntimeExtension;
+import org.eclipse.edc.junit.extensions.RuntimePerClassExtension;
 import org.eclipse.edc.policy.model.Policy;
 import org.eclipse.edc.spi.types.domain.DataAddress;
 import org.eclipse.edc.util.io.Ports;
@@ -56,7 +58,7 @@ public class DspCatalogApiEndToEndTest {
     private static final int PROTOCOL_PORT = Ports.getFreePort();
 
     @RegisterExtension
-    static EdcRuntimeExtension runtime = new EdcRuntimeExtension(
+    static RuntimeExtension runtime = new RuntimePerClassExtension(new EmbeddedRuntime(
             "runtime",
             Map.of(
                     "web.http.protocol.path", "/protocol",
@@ -70,7 +72,7 @@ public class DspCatalogApiEndToEndTest {
             ":core:control-plane:control-plane-aggregate-services",
             ":core:control-plane:control-plane-core",
             ":extensions:common:http"
-    );
+    ));
 
     @Test
     void shouldExposeVersion2024_1() {
@@ -90,21 +92,21 @@ public class DspCatalogApiEndToEndTest {
                 .contentType(JSON)
                 .body("'dspace:participantId'", notNullValue());
 
-        assertThat(runtime.getContext().getService(ProtocolVersionRegistry.class).getAll().protocolVersions())
+        assertThat(runtime.getService(ProtocolVersionRegistry.class).getAll().protocolVersions())
                 .contains(V_2024_1);
     }
 
     @Test
     void shouldPermitPaginationWithLinkHeader() {
-        var assetIndex = runtime.getContext().getService(AssetIndex.class);
+        var assetIndex = runtime.getService(AssetIndex.class);
         range(0, 8)
                 .mapToObj(i -> Asset.Builder.newInstance().id(i + "").dataAddress(DataAddress.Builder.newInstance().type("any").build()).build())
                 .forEach(assetIndex::create);
-        var policyDefinitionStore = runtime.getContext().getService(PolicyDefinitionStore.class);
+        var policyDefinitionStore = runtime.getService(PolicyDefinitionStore.class);
         policyDefinitionStore.create(PolicyDefinition.Builder.newInstance().policy(Policy.Builder.newInstance().build()).build())
                 .onSuccess(policy -> {
                     var contractDefinition = ContractDefinition.Builder.newInstance().accessPolicyId(policy.getId()).contractPolicyId(policy.getId()).build();
-                    runtime.getContext().getService(ContractDefinitionStore.class).save(contractDefinition);
+                    runtime.getService(ContractDefinitionStore.class).save(contractDefinition);
                 });
 
         var link = given()

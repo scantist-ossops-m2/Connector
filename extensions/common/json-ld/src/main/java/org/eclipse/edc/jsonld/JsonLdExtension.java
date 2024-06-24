@@ -52,7 +52,11 @@ public class JsonLdExtension implements ServiceExtension {
 
     public static final String NAME = "JSON-LD Extension";
     public static final String EDC_JSONLD_DOCUMENT_PREFIX = "edc.jsonld.document";
+    public static final String EDC_JSONLD_DOCUMENT_CONFIG_ALIAS = EDC_JSONLD_DOCUMENT_PREFIX + ".<documentAlias>.";
+
+    @Setting(context = EDC_JSONLD_DOCUMENT_CONFIG_ALIAS, value = "Path of the JSON-LD document to cache", required = true)
     public static final String CONFIG_VALUE_PATH = "path";
+    @Setting(context = EDC_JSONLD_DOCUMENT_CONFIG_ALIAS, value = "URL of the JSON-LD document to cache", required = true)
     public static final String CONFIG_VALUE_URL = "url";
 
     private static final boolean DEFAULT_HTTP_HTTPS_RESOLUTION = false;
@@ -63,6 +67,10 @@ public class JsonLdExtension implements ServiceExtension {
     private static final String DEFAULT_AVOID_VOCAB_CONTEXT = "false";
     @Setting(value = "If true disable the @vocab context definition. This could be used to avoid api breaking changes", type = "boolean", defaultValue = DEFAULT_AVOID_VOCAB_CONTEXT)
     private static final String AVOID_VOCAB_CONTEXT = "edc.jsonld.vocab.disable";
+    private static final boolean DEFAULT_CHECK_PREFIXES = true;
+    @Setting(value = "If true a validation on expended object will be made against configured prefixes", type = "boolean", defaultValue = DEFAULT_CHECK_PREFIXES + "")
+    private static final String CHECK_PREFIXES = "edc.jsonld.prefixes.check";
+
     @Inject
     private TypeManager typeManager;
 
@@ -82,6 +90,7 @@ public class JsonLdExtension implements ServiceExtension {
         var configuration = JsonLdConfiguration.Builder.newInstance()
                 .httpEnabled(config.getBoolean(HTTP_ENABLE_SETTING, DEFAULT_HTTP_HTTPS_RESOLUTION))
                 .httpsEnabled(config.getBoolean(HTTPS_ENABLE_SETTING, DEFAULT_HTTP_HTTPS_RESOLUTION))
+                .checkPrefixes(config.getBoolean(CHECK_PREFIXES, DEFAULT_CHECK_PREFIXES))
                 .build();
         var monitor = context.getMonitor();
         var service = new TitaniumJsonLd(monitor, configuration);
@@ -93,7 +102,7 @@ public class JsonLdExtension implements ServiceExtension {
         Stream.of(
                 new JsonLdContext("odrl.jsonld", "http://www.w3.org/ns/odrl.jsonld"),
                 new JsonLdContext("dspace.jsonld", "https://w3id.org/dspace/2024/1/context.json")
-        ).forEach(jsonLdContext -> getResourceUri("document" + File.separator + jsonLdContext.fileName())
+        ).forEach(jsonLdContext -> getResourceUri("document/" + jsonLdContext.fileName())
                 .onSuccess(uri -> service.registerCachedDocument(jsonLdContext.url(), uri))
                 .onFailure(failure -> monitor.warning("Failed to register cached json-ld document: " + failure.getFailureDetail()))
         );
@@ -131,6 +140,7 @@ public class JsonLdExtension implements ServiceExtension {
         }
     }
 
-    record JsonLdContext(String fileName, String url) { }
+    record JsonLdContext(String fileName, String url) {
+    }
 
 }

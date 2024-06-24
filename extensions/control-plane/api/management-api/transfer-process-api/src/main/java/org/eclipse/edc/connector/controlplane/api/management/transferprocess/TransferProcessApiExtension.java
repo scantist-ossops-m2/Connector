@@ -15,12 +15,13 @@
 package org.eclipse.edc.connector.controlplane.api.management.transferprocess;
 
 import jakarta.json.Json;
-import org.eclipse.edc.connector.api.management.configuration.ManagementApiConfiguration;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.transform.JsonObjectFromTransferProcessTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.transform.JsonObjectFromTransferStateTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.transform.JsonObjectToSuspendTransferTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.transform.JsonObjectToTerminateTransferTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.transform.JsonObjectToTransferRequestTransformer;
+import org.eclipse.edc.connector.controlplane.api.management.transferprocess.v2.TransferProcessApiV2Controller;
+import org.eclipse.edc.connector.controlplane.api.management.transferprocess.v3.TransferProcessApiV3Controller;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.validation.TerminateTransferValidator;
 import org.eclipse.edc.connector.controlplane.api.management.transferprocess.validation.TransferRequestValidator;
 import org.eclipse.edc.connector.controlplane.services.spi.transferprocess.TransferProcessService;
@@ -31,6 +32,7 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.eclipse.edc.validator.spi.JsonObjectValidatorRegistry;
 import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
 
 import static java.util.Collections.emptyMap;
 import static org.eclipse.edc.connector.controlplane.api.management.transferprocess.model.TerminateTransfer.TERMINATE_TRANSFER_TYPE;
@@ -43,9 +45,6 @@ public class TransferProcessApiExtension implements ServiceExtension {
 
     @Inject
     private WebService webService;
-
-    @Inject
-    private ManagementApiConfiguration configuration;
 
     @Inject
     private TypeTransformerRegistry transformerRegistry;
@@ -76,7 +75,7 @@ public class TransferProcessApiExtension implements ServiceExtension {
         validatorRegistry.register(TRANSFER_REQUEST_TYPE, TransferRequestValidator.instance(context.getMonitor()));
         validatorRegistry.register(TERMINATE_TRANSFER_TYPE, TerminateTransferValidator.instance());
 
-        var newController = new TransferProcessApiController(context.getMonitor(), service, managementApiTransformerRegistry, validatorRegistry);
-        webService.registerResource(configuration.getContextAlias(), newController);
+        webService.registerResource(ApiContext.MANAGEMENT, new TransferProcessApiV2Controller(context.getMonitor(), service, managementApiTransformerRegistry, validatorRegistry));
+        webService.registerResource(ApiContext.MANAGEMENT, new TransferProcessApiV3Controller(context.getMonitor(), service, managementApiTransformerRegistry, validatorRegistry));
     }
 }

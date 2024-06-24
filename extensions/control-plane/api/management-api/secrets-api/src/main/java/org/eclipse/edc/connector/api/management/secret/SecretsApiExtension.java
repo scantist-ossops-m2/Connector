@@ -15,9 +15,10 @@
 package org.eclipse.edc.connector.api.management.secret;
 
 import jakarta.json.Json;
-import org.eclipse.edc.connector.api.management.configuration.ManagementApiConfiguration;
 import org.eclipse.edc.connector.api.management.secret.transform.JsonObjectFromSecretTransformer;
 import org.eclipse.edc.connector.api.management.secret.transform.JsonObjectToSecretTransformer;
+import org.eclipse.edc.connector.api.management.secret.v1.SecretsApiV1Controller;
+import org.eclipse.edc.connector.api.management.secret.v3.SecretsApiV3Controller;
 import org.eclipse.edc.connector.api.management.secret.validation.SecretsValidator;
 import org.eclipse.edc.connector.spi.service.SecretService;
 import org.eclipse.edc.runtime.metamodel.annotation.Extension;
@@ -27,6 +28,7 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.eclipse.edc.validator.spi.JsonObjectValidatorRegistry;
 import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
 
 import java.util.Map;
 
@@ -39,9 +41,6 @@ public class SecretsApiExtension implements ServiceExtension {
 
     @Inject
     private WebService webService;
-
-    @Inject
-    private ManagementApiConfiguration config;
 
     @Inject
     private TypeTransformerRegistry transformerRegistry;
@@ -67,7 +66,8 @@ public class SecretsApiExtension implements ServiceExtension {
         managementApiTransformerRegistry.register(new JsonObjectFromSecretTransformer(jsonBuilderFactory));
         managementApiTransformerRegistry.register(new JsonObjectToSecretTransformer());
 
-        webService.registerResource(config.getContextAlias(), new SecretsApiController(secretService, managementApiTransformerRegistry, validator));
+        webService.registerResource(ApiContext.MANAGEMENT, new SecretsApiV1Controller(secretService, managementApiTransformerRegistry, validator, context.getMonitor()));
+        webService.registerResource(ApiContext.MANAGEMENT, new SecretsApiV3Controller(secretService, managementApiTransformerRegistry, validator));
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2022 ZF Friedrichshafen AG
+ *  Copyright (c) 2024 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)
  *
  *  This program and the accompanying materials are made available under the
  *  terms of the Apache License, Version 2.0 which is available at
@@ -8,7 +8,6 @@
  *  SPDX-License-Identifier: Apache-2.0
  *
  *  Contributors:
- *       ZF Friedrichshafen AG - Initial API and Implementation
  *       Bayerische Motoren Werke Aktiengesellschaft (BMW AG) - initial API and implementation
  *
  */
@@ -16,13 +15,13 @@
 package org.eclipse.edc.connector.controlplane.api.management.contractnegotiation;
 
 import jakarta.json.Json;
-import org.eclipse.edc.connector.api.management.configuration.ManagementApiConfiguration;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectFromContractNegotiationTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectFromNegotiationStateTransformer;
-import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectToContractOfferDescriptionTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectToContractOfferTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectToContractRequestTransformer;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.transform.JsonObjectToTerminateNegotiationCommandTransformer;
+import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.v2.ContractNegotiationApiV2Controller;
+import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.v3.ContractNegotiationApiV3Controller;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.validation.ContractRequestValidator;
 import org.eclipse.edc.connector.controlplane.api.management.contractnegotiation.validation.TerminateNegotiationValidator;
 import org.eclipse.edc.connector.controlplane.services.spi.contractnegotiation.ContractNegotiationService;
@@ -33,6 +32,7 @@ import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.transform.spi.TypeTransformerRegistry;
 import org.eclipse.edc.validator.spi.JsonObjectValidatorRegistry;
 import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
 
 import java.util.Map;
 
@@ -46,9 +46,6 @@ public class ContractNegotiationApiExtension implements ServiceExtension {
 
     @Inject
     private WebService webService;
-
-    @Inject
-    private ManagementApiConfiguration config;
 
     @Inject
     private TypeTransformerRegistry transformerRegistry;
@@ -73,7 +70,6 @@ public class ContractNegotiationApiExtension implements ServiceExtension {
 
         managementApiTransformerRegistry.register(new JsonObjectToContractRequestTransformer());
         managementApiTransformerRegistry.register(new JsonObjectToContractOfferTransformer());
-        managementApiTransformerRegistry.register(new JsonObjectToContractOfferDescriptionTransformer());
         managementApiTransformerRegistry.register(new JsonObjectToTerminateNegotiationCommandTransformer());
         managementApiTransformerRegistry.register(new JsonObjectFromContractNegotiationTransformer(factory));
         managementApiTransformerRegistry.register(new JsonObjectFromNegotiationStateTransformer(factory));
@@ -81,7 +77,7 @@ public class ContractNegotiationApiExtension implements ServiceExtension {
         validatorRegistry.register(CONTRACT_REQUEST_TYPE, ContractRequestValidator.instance(monitor));
         validatorRegistry.register(TERMINATE_NEGOTIATION_TYPE, TerminateNegotiationValidator.instance());
 
-        var controller = new ContractNegotiationApiController(service, managementApiTransformerRegistry, monitor, validatorRegistry);
-        webService.registerResource(config.getContextAlias(), controller);
+        webService.registerResource(ApiContext.MANAGEMENT, new ContractNegotiationApiV2Controller(service, managementApiTransformerRegistry, monitor, validatorRegistry));
+        webService.registerResource(ApiContext.MANAGEMENT, new ContractNegotiationApiV3Controller(service, managementApiTransformerRegistry, monitor, validatorRegistry));
     }
 }

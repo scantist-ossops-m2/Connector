@@ -15,12 +15,12 @@
 package org.eclipse.edc.connector.dataplane.selector;
 
 import jakarta.json.Json;
-import org.eclipse.edc.api.auth.spi.ControlClientAuthenticationProvider;
 import org.eclipse.edc.api.transformer.JsonObjectFromIdResponseTransformer;
 import org.eclipse.edc.connector.dataplane.selector.control.api.DataplaneSelectorControlApiController;
 import org.eclipse.edc.connector.dataplane.selector.spi.DataPlaneSelectorService;
 import org.eclipse.edc.connector.dataplane.selector.spi.instance.DataPlaneInstance;
 import org.eclipse.edc.connector.dataplane.selector.transformer.JsonObjectToSelectionRequestTransformer;
+import org.eclipse.edc.http.client.ControlApiHttpClientImpl;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
 import org.eclipse.edc.junit.annotations.ComponentTest;
 import org.eclipse.edc.spi.result.ServiceFailure;
@@ -46,6 +46,7 @@ import java.util.UUID;
 
 import static org.eclipse.edc.http.client.testfixtures.HttpTestUtils.testHttpClient;
 import static org.eclipse.edc.junit.assertions.AbstractResultAssert.assertThat;
+import static org.eclipse.edc.spi.result.ServiceFailure.Reason.CONFLICT;
 import static org.eclipse.edc.spi.result.ServiceFailure.Reason.NOT_FOUND;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -56,13 +57,14 @@ import static org.mockito.Mockito.when;
 @ComponentTest
 class RemoteDataPlaneSelectorServiceTest extends RestControllerTestBase {
 
+    private static final String[] FIELDS_TO_BE_IGNORED = {"createdAt", "stateTimestamp", "updatedAt"};
     private final String url = "http://localhost:%d/v1/dataplanes".formatted(port);
-    private final ControlClientAuthenticationProvider authenticationProvider = mock();
     private final DataPlaneSelectorService serverService = mock();
     private final TypeTransformerRegistry typeTransformerRegistry = new TypeTransformerRegistryImpl();
     private final JsonObjectValidatorRegistry validator = mock();
-    private final RemoteDataPlaneSelectorService service = new RemoteDataPlaneSelectorService(testHttpClient(), url,
-            JacksonJsonLd.createObjectMapper(), typeTransformerRegistry, "selectionStrategy", authenticationProvider);
+    private final ControlApiHttpClientImpl controlClient = new ControlApiHttpClientImpl(testHttpClient(), mock());
+    private final RemoteDataPlaneSelectorService service = new RemoteDataPlaneSelectorService(controlClient, url,
+            JacksonJsonLd.createObjectMapper(), typeTransformerRegistry, "selectionStrategy");
 
     @BeforeEach
     void setUp() {
@@ -88,7 +90,6 @@ class RemoteDataPlaneSelectorServiceTest extends RestControllerTestBase {
 
         assertThat(result).isSucceeded();
         verify(serverService).addInstance(any());
-        verify(authenticationProvider).authenticationHeaders();
     }
 
     @Test
@@ -98,8 +99,32 @@ class RemoteDataPlaneSelectorServiceTest extends RestControllerTestBase {
 
         var result = service.select(DataAddress.Builder.newInstance().type("test1").build(), "transferType", "random");
 
-        assertThat(result).isSucceeded().usingRecursiveComparison().isEqualTo(expected);
-        verify(authenticationProvider).authenticationHeaders();
+        assertThat(result).isSucceeded().usingRecursiveComparison()
+                .ignoringFields(FIELDS_TO_BE_IGNORED).isEqualTo(expected);
+    }
+
+    @Nested
+    class Unregister {
+        @Test
+        void shouldUnregister() {
+            var instanceId = UUID.randomUUID().toString();
+            when(serverService.unregister(any())).thenReturn(ServiceResult.success());
+
+            var result = service.unregister(instanceId);
+
+            assertThat(result).isSucceeded();
+            verify(serverService).unregister(instanceId);
+        }
+
+        @Test
+        void shouldFail_whenServiceFails() {
+            var instanceId = UUID.randomUUID().toString();
+            when(serverService.unregister(any())).thenReturn(ServiceResult.conflict("conflict"));
+
+            var result = service.unregister(instanceId);
+
+            assertThat(result).isFailed().extracting(ServiceFailure::getReason).isEqualTo(CONFLICT);
+        }
     }
 
     @Nested
@@ -127,15 +152,41 @@ class RemoteDataPlaneSelectorServiceTest extends RestControllerTestBase {
         }
     }
 
-    private DataPlaneInstance createInstance(String id) {
-        return DataPlaneInstance.Builder.newInstance()
-                .id(id)
-                .url("http://somewhere.com:1234/api/v1")
-                .build();
+    @Nested
+    class FindById {
+        @Test
+        void shouldReturnInstanceById() {
+            var instanceId = UUID.randomUUID().toString();
+            var instance = DataPlaneInstance.Builder.newInstance().url("http://any").build();
+            when(serverService.findById(any())).thenReturn(ServiceResult.success(instance));
+
+            var result = service.findById(instanceId);
+
+            assertThat(result).isSucceeded().usingRecursiveComparison()
+                    .ignoringFields(FIELDS_TO_BE_IGNORED)
+                    .isEqualTo(instance);
+        }
+
+        @Test
+        void shouldReturnNotFound_whenInstanceDoesNotExist() {
+            var instanceId = UUID.randomUUID().toString();
+            when(serverService.findById(any())).thenReturn(ServiceResult.notFound("not found"));
+
+            var result = service.findById(instanceId);
+
+            assertThat(result).isFailed().extracting(ServiceFailure::getReason).isEqualTo(NOT_FOUND);
+        }
     }
 
     @Override
     protected Object controller() {
         return new DataplaneSelectorControlApiController(validator, typeTransformerRegistry, serverService, Clock.systemUTC());
+    }
+
+    private DataPlaneInstance createInstance(String id) {
+        return DataPlaneInstance.Builder.newInstance()
+                .id(id)
+                .url("http://somewhere.com:1234/api/v1")
+                .build();
     }
 }

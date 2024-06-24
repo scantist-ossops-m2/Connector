@@ -25,8 +25,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
+import org.eclipse.edc.api.management.schema.ManagementApiSchema;
 import org.eclipse.edc.api.model.ApiCoreSchema;
-import org.eclipse.edc.connector.api.management.configuration.ManagementApiSchema;
 
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import static org.eclipse.edc.connector.controlplane.asset.spi.domain.Asset.EDC_ASSET_TYPE;
@@ -36,10 +36,9 @@ import static org.eclipse.edc.jsonld.spi.JsonLdKeywords.TYPE;
 
 @OpenAPIDefinition(
         info = @Info(description = "This contains both the current and the new Asset API, which accepts JSON-LD and will " +
-                "become the standard API once the Dataspace Protocol is stable.", title = "Asset API"))
-@Tag(name = "Asset")
+                "become the standard API once the Dataspace Protocol is stable.", title = "Asset API", version = "v3"))
+@Tag(name = "Asset V3")
 public interface AssetApi {
-
     @Operation(description = "Creates a new asset together with a data address",
             requestBody = @RequestBody(content = @Content(schema = @Schema(implementation = AssetInputSchema.class))),
             responses = {
@@ -50,7 +49,7 @@ public interface AssetApi {
                     @ApiResponse(responseCode = "409", description = "Could not create asset, because an asset with that ID already exists",
                             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApiCoreSchema.ApiErrorDetailSchema.class)))) }
     )
-    JsonObject createAsset(JsonObject asset);
+    JsonObject createAssetV3(JsonObject asset);
 
     @Operation(description = "Request all assets according to a particular query",
             requestBody = @RequestBody(
@@ -62,7 +61,7 @@ public interface AssetApi {
                     @ApiResponse(responseCode = "400", description = "Request body was malformed",
                             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApiCoreSchema.ApiErrorDetailSchema.class))))
             })
-    JsonArray requestAssets(JsonObject querySpecJson);
+    JsonArray requestAssetsV3(JsonObject querySpecJson);
 
     @Operation(description = "Gets an asset with the given ID",
             responses = {
@@ -74,7 +73,7 @@ public interface AssetApi {
                             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApiCoreSchema.ApiErrorDetailSchema.class))))
             }
     )
-    JsonObject getAsset(String id);
+    JsonObject getAssetV3(String id);
 
     @Operation(description = "Removes an asset with the given ID if possible. Deleting an asset is only possible if that asset is not yet referenced " +
             "by a contract agreement, in which case an error is returned. " +
@@ -88,7 +87,7 @@ public interface AssetApi {
                     @ApiResponse(responseCode = "409", description = "The asset cannot be deleted, because it is referenced by a contract agreement",
                             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApiCoreSchema.ApiErrorDetailSchema.class))))
             })
-    void removeAsset(String id);
+    void removeAssetV3(String id);
 
     @Operation(description = "Updates an asset with the given ID if it exists. If the asset is not found, no further action is taken. " +
             "DANGER ZONE: Note that updating assets can have unexpected results, especially for contract offers that have been sent out or are ongoing in contract negotiations.",
@@ -99,7 +98,7 @@ public interface AssetApi {
                     @ApiResponse(responseCode = "400", description = "Request was malformed, e.g. id was null",
                             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApiCoreSchema.ApiErrorDetailSchema.class)))),
             })
-    void updateAsset(JsonObject asset);
+    void updateAssetV3(JsonObject asset);
 
     @Schema(name = "AssetInput", example = AssetInputSchema.ASSET_INPUT_EXAMPLE)
     record AssetInputSchema(

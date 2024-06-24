@@ -19,18 +19,20 @@ import jakarta.json.Json;
 import jakarta.json.JsonArray;
 import jakarta.json.JsonArrayBuilder;
 import jakarta.json.JsonObject;
+import org.eclipse.edc.connector.controlplane.contract.spi.negotiation.store.ContractNegotiationStore;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.agreement.ContractAgreement;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.negotiation.ContractNegotiation;
 import org.eclipse.edc.connector.controlplane.transfer.spi.store.TransferProcessStore;
 import org.eclipse.edc.connector.controlplane.transfer.spi.types.TransferProcess;
 import org.eclipse.edc.jsonld.util.JacksonJsonLd;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.annotations.PostgresqlIntegrationTest;
-import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
+import org.eclipse.edc.policy.model.Policy;
 import org.eclipse.edc.spi.types.domain.DataAddress;
 import org.eclipse.edc.spi.types.domain.callback.CallbackAddress;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -55,31 +57,24 @@ import static org.eclipse.edc.spi.query.Criterion.criterion;
 import static org.eclipse.edc.spi.types.domain.callback.CallbackAddress.EVENTS;
 import static org.eclipse.edc.spi.types.domain.callback.CallbackAddress.IS_TRANSACTIONAL;
 import static org.eclipse.edc.spi.types.domain.callback.CallbackAddress.URI;
-import static org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance.createDatabase;
-import static org.eclipse.edc.test.e2e.managementapi.Runtimes.inMemoryRuntime;
-import static org.eclipse.edc.test.e2e.managementapi.Runtimes.postgresRuntime;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.Matchers.is;
 
 public class TransferProcessApiEndToEndTest {
 
-    abstract static class Tests extends ManagementApiEndToEndTestBase {
-
-        Tests(EdcRuntimeExtension runtime) {
-            super(runtime);
-        }
+    abstract static class Tests {
 
         @Test
-        void getAll() {
+        void getAll(ManagementEndToEndTestContext context, TransferProcessStore store) {
             var id1 = UUID.randomUUID().toString();
             var id2 = UUID.randomUUID().toString();
-            getStore().save(createTransferProcess(id1));
-            getStore().save(createTransferProcess(id2));
+            store.save(createTransferProcess(id1));
+            store.save(createTransferProcess(id2));
 
-            baseRequest()
+            context.baseRequest()
                     .contentType(JSON)
-                    .body(query(criterion("id", "in", List.of(id1, id2))))
-                    .post("/v2/transferprocesses/request")
+                    .body(context.query(criterion("id", "in", List.of(id1, id2))))
+                    .post("/v3/transferprocesses/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
@@ -89,12 +84,12 @@ public class TransferProcessApiEndToEndTest {
         }
 
         @Test
-        void getById() {
-            getStore().save(createTransferProcess("tp1"));
-            getStore().save(createTransferProcess("tp2"));
+        void getById(ManagementEndToEndTestContext context, TransferProcessStore store) {
+            store.save(createTransferProcess("tp1"));
+            store.save(createTransferProcess("tp2"));
 
-            baseRequest()
-                    .get("/v2/transferprocesses/tp2")
+            context.baseRequest()
+                    .get("/v3/transferprocesses/tp2")
                     .then()
                     .statusCode(200)
                     .body("@id", is("tp2"))
@@ -102,11 +97,11 @@ public class TransferProcessApiEndToEndTest {
         }
 
         @Test
-        void getState() {
-            getStore().save(createTransferProcessBuilder("tp2").state(COMPLETED.code()).build());
+        void getState(ManagementEndToEndTestContext context, TransferProcessStore store) {
+            store.save(createTransferProcessBuilder("tp2").state(COMPLETED.code()).build());
 
-            baseRequest()
-                    .get("/v2/transferprocesses/tp2/state")
+            context.baseRequest()
+                    .get("/v3/transferprocesses/tp2/state")
                     .then()
                     .statusCode(200)
                     .contentType(JSON)
@@ -115,7 +110,18 @@ public class TransferProcessApiEndToEndTest {
         }
 
         @Test
-        void create() {
+        void create(ManagementEndToEndTestContext context, TransferProcessStore transferProcessStore, ContractNegotiationStore contractNegotiationStore) {
+            var assetId = UUID.randomUUID().toString();
+            var contractId = UUID.randomUUID().toString();
+            var contractNegotiation = ContractNegotiation.Builder.newInstance()
+                    .id(UUID.randomUUID().toString())
+                    .counterPartyId("counterPartyId")
+                    .counterPartyAddress("http://counterparty")
+                    .protocol("dataspace-protocol-http")
+                    .contractAgreement(createContractAgreement(contractId, assetId).build())
+                    .build();
+            contractNegotiationStore.save(contractNegotiation);
+
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder().add(VOCAB, EDC_NAMESPACE))
                     .add(TYPE, "TransferRequest")
@@ -131,60 +137,60 @@ public class TransferProcessApiEndToEndTest {
                     .add("callbackAddresses", createCallbackAddress())
                     .add("protocol", "dataspace-protocol-http")
                     .add("counterPartyAddress", "http://connector-address")
-                    .add("contractId", "contractId")
-                    .add("assetId", "assetId")
+                    .add("contractId", contractId)
+                    .add("assetId", assetId)
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .contentType(JSON)
                     .body(requestBody)
-                    .post("/v2/transferprocesses/")
+                    .post("/v3/transferprocesses/")
                     .then()
                     .log().ifError()
                     .statusCode(200)
                     .extract().jsonPath().getString(ID);
 
-            assertThat(getStore().findById(id)).isNotNull();
+            assertThat(transferProcessStore.findById(id)).isNotNull();
         }
 
         @Test
-        void deprovision() {
+        void deprovision(ManagementEndToEndTestContext context, TransferProcessStore store) {
             var id = UUID.randomUUID().toString();
-            getStore().save(createTransferProcessBuilder(id).state(COMPLETED.code()).build());
+            store.save(createTransferProcessBuilder(id).state(COMPLETED.code()).build());
 
-            baseRequest()
+            context.baseRequest()
                     .contentType(JSON)
-                    .post("/v2/transferprocesses/" + id + "/deprovision")
+                    .post("/v3/transferprocesses/" + id + "/deprovision")
                     .then()
                     .statusCode(204);
         }
 
         @Test
-        void terminate() {
+        void terminate(ManagementEndToEndTestContext context, TransferProcessStore store) {
             var id = UUID.randomUUID().toString();
-            getStore().save(createTransferProcessBuilder(id).state(REQUESTED.code()).build());
+            store.save(createTransferProcessBuilder(id).state(REQUESTED.code()).build());
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder().add(VOCAB, EDC_NAMESPACE))
                     .add("reason", "any")
                     .build();
 
-            baseRequest()
+            context.baseRequest()
                     .contentType(JSON)
                     .body(requestBody)
-                    .post("/v2/transferprocesses/" + id + "/terminate")
+                    .post("/v3/transferprocesses/" + id + "/terminate")
                     .then()
                     .log().ifError()
                     .statusCode(204);
         }
 
         @Test
-        void request_byState() throws JsonProcessingException {
+        void request_byState(ManagementEndToEndTestContext context, TransferProcessStore store) throws JsonProcessingException {
 
             var state = DEPROVISIONED;
             var tp = createTransferProcessBuilder("test-tp")
                     .state(state.code())
                     .build();
-            getStore().save(tp);
+            store.save(tp);
 
 
             var content = """
@@ -207,10 +213,10 @@ public class TransferProcessApiEndToEndTest {
             var query = JacksonJsonLd.createObjectMapper()
                     .readValue(content, JsonObject.class);
 
-            var result = baseRequest()
+            var result = context.baseRequest()
                     .contentType(JSON)
                     .body(query)
-                    .post("/v2/transferprocesses/request")
+                    .post("/v3/transferprocesses/request")
                     .then()
                     .statusCode(200)
                     .extract().body().as(JsonArray.class);
@@ -220,13 +226,13 @@ public class TransferProcessApiEndToEndTest {
         }
 
         @Test
-        void request_sortByStateTimestamp() throws JsonProcessingException, InterruptedException {
+        void request_sortByStateTimestamp(ManagementEndToEndTestContext context, TransferProcessStore store) throws JsonProcessingException {
             var tp1 = createTransferProcessBuilder("test-tp1").build();
             var tp2 = createTransferProcessBuilder("test-tp2")
                     .clock(Clock.fixed(Instant.now().plus(1, ChronoUnit.HOURS), ZoneId.systemDefault()))
                     .build();
-            getStore().save(tp1);
-            getStore().save(tp2);
+            store.save(tp1);
+            store.save(tp2);
 
 
             var content = """
@@ -244,10 +250,10 @@ public class TransferProcessApiEndToEndTest {
             var query = JacksonJsonLd.createObjectMapper()
                     .readValue(content, JsonObject.class);
 
-            var result = baseRequest()
+            var result = context.baseRequest()
                     .contentType(JSON)
                     .body(query)
-                    .post("/v2/transferprocesses/request")
+                    .post("/v3/transferprocesses/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
@@ -259,10 +265,6 @@ public class TransferProcessApiEndToEndTest {
                 var l2 = o2.asJsonObject().getJsonNumber("stateTimestamp").longValue();
                 return Long.compare(l1, l2);
             });
-        }
-
-        private TransferProcessStore getStore() {
-            return runtime.getContext().getService(TransferProcessStore.class);
         }
 
         private TransferProcess createTransferProcess(String id) {
@@ -290,33 +292,27 @@ public class TransferProcessApiEndToEndTest {
                     .add(URI, "http://test.local/")
                     .add(EVENTS, Json.createArrayBuilder().build()));
         }
+
+        private ContractAgreement.Builder createContractAgreement(String contractId, String assetId) {
+            return ContractAgreement.Builder.newInstance()
+                    .id(contractId)
+                    .providerId("providerId")
+                    .consumerId("consumerId")
+                    .policy(Policy.Builder.newInstance().target(assetId).build())
+                    .assetId(assetId);
+        }
     }
 
     @Nested
     @EndToEndTest
+    @ExtendWith(ManagementEndToEndExtension.InMemory.class)
     class InMemory extends Tests {
-
-        @RegisterExtension
-        public static final EdcRuntimeExtension RUNTIME = inMemoryRuntime();
-
-        InMemory() {
-            super(RUNTIME);
-        }
-
     }
 
     @Nested
     @PostgresqlIntegrationTest
+    @ExtendWith(ManagementEndToEndExtension.Postgres.class)
     class Postgres extends Tests {
-
-        @RegisterExtension
-        public static final EdcRuntimeExtension RUNTIME = postgresRuntime();
-        @RegisterExtension
-        static final BeforeAllCallback CREATE_DATABASE = context -> createDatabase("runtime");
-
-        Postgres() {
-            super(RUNTIME);
-        }
     }
 
 }

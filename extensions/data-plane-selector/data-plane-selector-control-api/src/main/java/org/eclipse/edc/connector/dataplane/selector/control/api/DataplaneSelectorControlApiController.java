@@ -18,7 +18,9 @@ import jakarta.json.JsonArray;
 import jakarta.json.JsonObject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -78,10 +80,17 @@ public class DataplaneSelectorControlApiController implements DataplaneSelectorC
                 .orElseThrow(f -> new EdcException(f.getFailureDetail()));
     }
 
+    @PUT
+    @Path("/{id}/unregister")
     @Override
+    public void unregisterDataplane(@PathParam("id") String id) {
+        service.unregister(id).orElseThrow(exceptionMapper(DataPlaneInstance.class));
+    }
+
     @DELETE
     @Path("/{id}")
-    public void unregisterDataplane(@PathParam("id") String id) {
+    @Override
+    public void deleteDataplane(@PathParam("id") String id) {
         service.delete(id).orElseThrow(exceptionMapper(DataPlaneInstance.class));
     }
 
@@ -100,6 +109,7 @@ public class DataplaneSelectorControlApiController implements DataplaneSelectorC
     }
 
     @Override
+    @GET
     public JsonArray getAllDataPlaneInstances() {
         var instances = service.getAll().orElseThrow(exceptionMapper(DataPlaneInstance.class));
 
@@ -108,6 +118,16 @@ public class DataplaneSelectorControlApiController implements DataplaneSelectorC
                 .filter(Result::succeeded)
                 .map(Result::getContent)
                 .collect(toJsonArray());
+    }
+
+    @Override
+    @GET
+    @Path("/{id}")
+    public JsonObject findDataPlaneById(@PathParam("id") String id) {
+        var instance = service.findById(id).orElseThrow(exceptionMapper(DataPlaneInstance.class, id));
+
+        return transformerRegistry.transform(instance, JsonObject.class)
+                .orElseThrow(f -> new EdcException(f.getFailureDetail()));
     }
 
 }

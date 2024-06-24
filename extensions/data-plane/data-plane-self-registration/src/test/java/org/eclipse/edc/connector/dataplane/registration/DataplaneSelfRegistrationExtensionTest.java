@@ -14,15 +14,17 @@
 
 package org.eclipse.edc.connector.dataplane.registration;
 
-import org.eclipse.edc.connector.controlplane.transfer.spi.callback.ControlApiUrl;
 import org.eclipse.edc.connector.dataplane.selector.spi.DataPlaneSelectorService;
 import org.eclipse.edc.connector.dataplane.selector.spi.instance.DataPlaneInstance;
 import org.eclipse.edc.connector.dataplane.spi.iam.PublicEndpointGeneratorService;
 import org.eclipse.edc.connector.dataplane.spi.pipeline.PipelineService;
 import org.eclipse.edc.junit.extensions.DependencyInjectionExtension;
 import org.eclipse.edc.spi.EdcException;
+import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.ServiceResult;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
+import org.eclipse.edc.spi.system.health.HealthCheckService;
+import org.eclipse.edc.web.spi.configuration.context.ControlApiUrl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +38,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -47,6 +50,7 @@ class DataplaneSelfRegistrationExtensionTest {
     private final ControlApiUrl controlApiUrl = mock();
     private final PipelineService pipelineService = mock();
     private final PublicEndpointGeneratorService publicEndpointGeneratorService = mock();
+    private final HealthCheckService healthCheckService = mock();
 
     @BeforeEach
     void setUp(ServiceExtensionContext context) {
@@ -54,6 +58,10 @@ class DataplaneSelfRegistrationExtensionTest {
         context.registerService(ControlApiUrl.class, controlApiUrl);
         context.registerService(PipelineService.class, pipelineService);
         context.registerService(PublicEndpointGeneratorService.class, publicEndpointGeneratorService);
+        var monitor = mock(Monitor.class);
+        when(monitor.withPrefix(anyString())).thenReturn(mock());
+        context.registerService(Monitor.class, monitor);
+        context.registerService(HealthCheckService.class, healthCheckService);
     }
 
     @Test
@@ -77,6 +85,10 @@ class DataplaneSelfRegistrationExtensionTest {
         assertThat(dataPlaneInstance.getAllowedDestTypes()).containsExactlyInAnyOrder("sinkType", "anotherSinkType");
         assertThat(dataPlaneInstance.getAllowedTransferTypes())
                 .containsExactlyInAnyOrder("pullDestType-PULL", "anotherPullDestType-PULL", "sinkType-PUSH", "anotherSinkType-PUSH");
+
+        verify(healthCheckService).addStartupStatusProvider(any());
+        verify(healthCheckService).addLivenessProvider(any());
+        verify(healthCheckService).addReadinessProvider(any());
     }
 
     @Test
@@ -90,13 +102,13 @@ class DataplaneSelfRegistrationExtensionTest {
     }
 
     @Test
-    void shouldUnregisterInstanceAtStartup(DataplaneSelfRegistrationExtension extension, ServiceExtensionContext context) {
+    void shouldUnregisterInstanceAtShutdown(DataplaneSelfRegistrationExtension extension, ServiceExtensionContext context) {
         when(context.getRuntimeId()).thenReturn("runtimeId");
-        when(dataPlaneSelectorService.delete(any())).thenReturn(ServiceResult.success());
+        when(dataPlaneSelectorService.unregister(any())).thenReturn(ServiceResult.success());
         extension.initialize(context);
 
         extension.shutdown();
 
-        verify(dataPlaneSelectorService).delete("runtimeId");
+        verify(dataPlaneSelectorService).unregister("runtimeId");
     }
 }

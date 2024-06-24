@@ -19,7 +19,6 @@ import jakarta.json.JsonValue;
 import org.assertj.core.api.Assertions;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.jsonld.spi.JsonLdKeywords;
-import org.eclipse.edc.junit.assertions.AbstractResultAssert;
 import org.eclipse.edc.junit.testfixtures.TestUtils;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.util.io.Ports;
@@ -28,11 +27,13 @@ import org.junit.jupiter.api.Test;
 import org.mockserver.integration.ClientAndServer;
 import org.mockserver.model.HttpRequest;
 import org.mockserver.model.HttpResponse;
+import org.mockserver.verify.VerificationTimes;
 
 import java.net.URI;
 
 import static jakarta.json.Json.createArrayBuilder;
 import static jakarta.json.Json.createObjectBuilder;
+import static org.eclipse.edc.junit.assertions.AbstractResultAssert.assertThat;
 import static org.mockito.Mockito.mock;
 
 class TitaniumJsonLdTest {
@@ -58,7 +59,7 @@ class TitaniumJsonLdTest {
 
         var expanded = defaultService().expand(jsonObject);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().extracting(Object::toString).asString()
+        assertThat(expanded).isSucceeded().extracting(Object::toString).asString()
                 .contains("test:item")
                 .contains("test:key1")
                 .contains("@value\":\"value1\"")
@@ -72,7 +73,37 @@ class TitaniumJsonLdTest {
 
         var expanded = defaultService().expand(emptyJson);
 
-        AbstractResultAssert.assertThat(expanded).isFailed();
+        assertThat(expanded).isFailed();
+    }
+
+    @Test
+    void expand_shouldSucceed_whenChecksDisabledOnMissingContext() {
+        var jsonObject = createObjectBuilder()
+                .add(JsonLdKeywords.CONTEXT, createObjectBuilder().build())
+                .add("custom:item", "foo")
+                .build();
+        var jsonLd = defaultService(JsonLdConfiguration.Builder.newInstance().checkPrefixes(false).build());
+
+        jsonLd.registerNamespace("custom", "https://custom.namespace.org/schema/");
+
+        var expanded = jsonLd.expand(jsonObject);
+
+        assertThat(expanded).isSucceeded();
+    }
+
+    @Test
+    void expand_shouldFail_whenMissingContext() {
+        var jsonObject = createObjectBuilder()
+                .add(JsonLdKeywords.CONTEXT, createObjectBuilder().build())
+                .add("custom:item", "foo")
+                .build();
+        var jsonLd = defaultService();
+
+        jsonLd.registerNamespace("custom", "https://custom.namespace.org/schema/");
+
+        var expanded = jsonLd.expand(jsonObject);
+
+        assertThat(expanded).isFailed();
     }
 
     @Test
@@ -88,13 +119,14 @@ class TitaniumJsonLdTest {
 
         var expanded = defaultService().expand(jsonObject);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().extracting(Object::toString).asString()
+        assertThat(expanded).isSucceeded().extracting(Object::toString).asString()
                 .contains("test:item")
                 .contains("test:key1")
                 .contains("@value\":\"value1\"")
                 .contains("https://custom.namespace.org/schema/key2")
                 .contains("@value\":\"value2\"");
     }
+
 
     @Test
     void compact() {
@@ -108,7 +140,7 @@ class TitaniumJsonLdTest {
 
         var compacted = defaultService().compact(expanded);
 
-        AbstractResultAssert.assertThat(compacted).isSucceeded().satisfies(c -> {
+        assertThat(compacted).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c.getJsonObject(ns + "item")).isNotNull();
             Assertions.assertThat(c.getJsonObject(ns + "item").getJsonString(ns + "key1").getString()).isEqualTo("value1");
             Assertions.assertThat(c.getJsonObject(ns + "item").getJsonString(ns + "key2").getString()).isEqualTo("value2");
@@ -130,7 +162,7 @@ class TitaniumJsonLdTest {
         service.registerNamespace(prefix, ns);
         var compacted = service.compact(expanded);
 
-        AbstractResultAssert.assertThat(compacted).isSucceeded().satisfies(c -> {
+        assertThat(compacted).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c.getJsonObject(prefix + ":item")).isNotNull();
             Assertions.assertThat(c.getJsonObject(prefix + ":item").getJsonString(prefix + ":key1").getString()).isEqualTo("value1");
             Assertions.assertThat(c.getJsonObject(prefix + ":item").getJsonString(prefix + ":key2").getString()).isEqualTo("value2");
@@ -153,14 +185,14 @@ class TitaniumJsonLdTest {
 
         var expanded = service.expand(input);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().satisfies(c -> {
+        assertThat(expanded).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c.getJsonArray(context + "name").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Jane Doe");
             Assertions.assertThat(c.getJsonArray(context + "jobTitle").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Professor");
         });
 
         var compacted = service.compact(expanded.getContent());
 
-        AbstractResultAssert.assertThat(compacted).isSucceeded().satisfies(c -> {
+        assertThat(compacted).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c).isEqualTo(input);
         });
     }
@@ -185,14 +217,14 @@ class TitaniumJsonLdTest {
 
         var expanded = service.expand(input);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().satisfies(c -> {
+        assertThat(expanded).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c.getJsonArray(testSchemaContext + "name").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Jane Doe");
             Assertions.assertThat(c.getJsonArray(schemaContext + "jobTitle").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Professor");
         });
 
         var compacted = service.compact(expanded.getContent());
 
-        AbstractResultAssert.assertThat(compacted).isSucceeded().satisfies(c -> {
+        assertThat(compacted).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c).isEqualTo(input);
         });
     }
@@ -218,14 +250,14 @@ class TitaniumJsonLdTest {
 
         var expanded = service.expand(input);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().satisfies(c -> {
+        assertThat(expanded).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c.getJsonArray(testSchemaContext + "name").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Jane Doe");
             Assertions.assertThat(c.getJsonArray(schemaContext + "jobTitle").get(0).asJsonObject().getJsonString(JsonLdKeywords.VALUE).getString()).isEqualTo("Professor");
         });
 
         var compacted = service.compact(expanded.getContent(), customScope);
 
-        AbstractResultAssert.assertThat(compacted).isSucceeded().satisfies(c -> {
+        assertThat(compacted).isSucceeded().satisfies(c -> {
             Assertions.assertThat(c).isEqualTo(input);
         });
     }
@@ -243,7 +275,7 @@ class TitaniumJsonLdTest {
         var expanded = service.expand(jsonObject);
 
         server.verifyZeroInteractions();
-        AbstractResultAssert.assertThat(expanded).isSucceeded().satisfies(json -> {
+        assertThat(expanded).isSucceeded().satisfies(json -> {
             Assertions.assertThat(json.getJsonArray("http://test.org/context/key")).hasSize(1).first()
                     .extracting(JsonValue::asJsonObject)
                     .extracting(it -> it.getString(JsonLdKeywords.VALUE))
@@ -263,7 +295,7 @@ class TitaniumJsonLdTest {
 
         var expanded = service.expand(jsonObject);
 
-        AbstractResultAssert.assertThat(expanded).isFailed();
+        assertThat(expanded).isFailed();
     }
 
     @Test
@@ -279,12 +311,32 @@ class TitaniumJsonLdTest {
 
         var expanded = service.expand(jsonObject);
 
-        AbstractResultAssert.assertThat(expanded).isSucceeded().satisfies(json -> {
+        assertThat(expanded).isSucceeded().satisfies(json -> {
             Assertions.assertThat(json.getJsonArray("http://test.org/context/key")).hasSize(1).first()
                     .extracting(JsonValue::asJsonObject)
                     .extracting(it -> it.getString(JsonLdKeywords.VALUE))
                     .isEqualTo("value");
         });
+
+    }
+
+
+    @Test
+    void documentResolution_shouldCallHttpEndpointOnlyOnce_whenContextIsNotRegistered_andHttpIsEnabled() {
+        server.when(HttpRequest.request()).respond(HttpResponse.response(TestUtils.getResourceFileContentAsString("test-context.jsonld")));
+        var contextUrl = "http://localhost:" + port;
+        var jsonObject = createObjectBuilder()
+                .add(JsonLdKeywords.CONTEXT, contextUrl)
+                .add("test:key", "value")
+                .build();
+        var service = httpEnabledService();
+        service.registerCachedDocument("http//any.other/url", URI.create("http://localhost:" + server.getLocalPort()));
+
+        assertThat(service.expand(jsonObject)).isSucceeded();
+        assertThat(service.expand(jsonObject)).isSucceeded();
+
+        server.verify(HttpRequest.request().withMethod("GET"), VerificationTimes.exactly(1));
+
     }
 
     private JsonLd httpEnabledService() {
@@ -292,6 +344,10 @@ class TitaniumJsonLdTest {
     }
 
     private JsonLd defaultService() {
-        return new TitaniumJsonLd(monitor);
+        return defaultService(JsonLdConfiguration.Builder.newInstance().build());
+    }
+
+    private JsonLd defaultService(JsonLdConfiguration configuration) {
+        return new TitaniumJsonLd(monitor, configuration);
     }
 }

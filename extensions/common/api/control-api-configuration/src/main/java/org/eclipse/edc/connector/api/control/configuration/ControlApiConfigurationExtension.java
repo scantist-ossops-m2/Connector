@@ -15,30 +15,32 @@
 package org.eclipse.edc.connector.api.control.configuration;
 
 import org.eclipse.edc.api.auth.spi.AuthenticationRequestFilter;
-import org.eclipse.edc.api.auth.spi.ControlClientAuthenticationProvider;
 import org.eclipse.edc.api.auth.spi.registry.ApiAuthenticationRegistry;
-import org.eclipse.edc.connector.controlplane.transfer.spi.callback.ControlApiUrl;
 import org.eclipse.edc.jsonld.spi.JsonLd;
 import org.eclipse.edc.runtime.metamodel.annotation.Extension;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
-import org.eclipse.edc.runtime.metamodel.annotation.Provider;
 import org.eclipse.edc.runtime.metamodel.annotation.Provides;
 import org.eclipse.edc.runtime.metamodel.annotation.Setting;
+import org.eclipse.edc.runtime.metamodel.annotation.SettingContext;
 import org.eclipse.edc.spi.EdcException;
 import org.eclipse.edc.spi.system.Hostname;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
+import org.eclipse.edc.spi.system.apiversion.ApiVersionService;
+import org.eclipse.edc.spi.system.apiversion.VersionRecord;
 import org.eclipse.edc.spi.types.TypeManager;
 import org.eclipse.edc.web.jersey.providers.jsonld.JerseyJsonLdInterceptor;
 import org.eclipse.edc.web.jersey.providers.jsonld.ObjectMapperProvider;
 import org.eclipse.edc.web.spi.WebServer;
 import org.eclipse.edc.web.spi.WebService;
+import org.eclipse.edc.web.spi.configuration.ApiContext;
 import org.eclipse.edc.web.spi.configuration.WebServiceConfiguration;
 import org.eclipse.edc.web.spi.configuration.WebServiceConfigurer;
 import org.eclipse.edc.web.spi.configuration.WebServiceSettings;
+import org.eclipse.edc.web.spi.configuration.context.ControlApiUrl;
 
+import java.io.IOException;
 import java.net.URI;
-import java.util.Collections;
 
 import static java.lang.String.format;
 import static org.eclipse.edc.jsonld.spi.Namespaces.DSPACE_PREFIX;
@@ -52,7 +54,7 @@ import static org.eclipse.edc.spi.constants.CoreConstants.JSON_LD;
  * `default` or `control`
  */
 @Extension(value = ControlApiConfigurationExtension.NAME)
-@Provides({ ControlApiConfiguration.class, ControlApiUrl.class })
+@Provides(ControlApiUrl.class)
 public class ControlApiConfigurationExtension implements ServiceExtension {
 
     public static final String NAME = "Control API configuration";
@@ -60,19 +62,21 @@ public class ControlApiConfigurationExtension implements ServiceExtension {
     @Setting(value = "Configures endpoint for reaching the Control API. If it's missing it defaults to the hostname configuration.")
     public static final String CONTROL_API_ENDPOINT = "edc.control.endpoint";
 
-    public static final String CONTROL_CONTEXT_ALIAS = "control";
     private static final String WEB_SERVICE_NAME = "Control API";
-    private static final int DEFAULT_CONTROL_API_PORT = 9191;
-    private static final String DEFAULT_CONTROL_API_CONTEXT_PATH = "/api/v1/control";
+
+    @SettingContext("Control API context setting key")
+    private static final String CONTROL_CONFIG_KEY = "web.http." + ApiContext.CONTROL;
+
     public static final WebServiceSettings SETTINGS = WebServiceSettings.Builder.newInstance()
-            .apiConfigKey("web.http." + CONTROL_CONTEXT_ALIAS)
-            .contextAlias(CONTROL_CONTEXT_ALIAS)
-            .defaultPath(DEFAULT_CONTROL_API_CONTEXT_PATH)
-            .defaultPort(DEFAULT_CONTROL_API_PORT)
+            .apiConfigKey(CONTROL_CONFIG_KEY)
+            .contextAlias(ApiContext.CONTROL)
+            .defaultPath("/api/v1/control")
+            .defaultPort(9191)
             .useDefaultContext(true)
             .name(WEB_SERVICE_NAME)
             .build();
     private static final String CONTROL_SCOPE = "CONTROL_API";
+    private static final String API_VERSION_JSON_FILE = "version.json";
 
     @Inject
     private WebServer webServer;
@@ -89,6 +93,9 @@ public class ControlApiConfigurationExtension implements ServiceExtension {
     @Inject
     private ApiAuthenticationRegistry authenticationRegistry;
 
+    @Inject
+    private ApiVersionService apiVersionService;
+
     @Override
     public String name() {
         return NAME;
@@ -96,24 +103,32 @@ public class ControlApiConfigurationExtension implements ServiceExtension {
 
     @Override
     public void initialize(ServiceExtensionContext context) {
-        var config = configurator.configure(context, webServer, SETTINGS);
+        var config = context.getConfig(CONTROL_CONFIG_KEY);
+        var controlApiConfiguration = configurator.configure(config, webServer, SETTINGS);
         var jsonLdMapper = typeManager.getMapper(JSON_LD);
-        context.registerService(ControlApiConfiguration.class, new ControlApiConfiguration(config));
-        context.registerService(ControlApiUrl.class, controlApiUrl(context, config));
+        context.registerService(ControlApiUrl.class, controlApiUrl(context, controlApiConfiguration));
 
         jsonLd.registerNamespace(ODRL_PREFIX, ODRL_SCHEMA, CONTROL_SCOPE);
         jsonLd.registerNamespace(DSPACE_PREFIX, DSPACE_SCHEMA, CONTROL_SCOPE);
 
         var authenticationRequestFilter = new AuthenticationRequestFilter(authenticationRegistry, "control-api");
-        webService.registerResource(SETTINGS.getContextAlias(), authenticationRequestFilter);
+        webService.registerResource(ApiContext.CONTROL, authenticationRequestFilter);
+        webService.registerResource(ApiContext.CONTROL, new ObjectMapperProvider(jsonLdMapper));
+        webService.registerResource(ApiContext.CONTROL, new JerseyJsonLdInterceptor(jsonLd, jsonLdMapper, CONTROL_SCOPE));
 
-        webService.registerResource(SETTINGS.getContextAlias(), new ObjectMapperProvider(jsonLdMapper));
-        webService.registerResource(SETTINGS.getContextAlias(), new JerseyJsonLdInterceptor(jsonLd, jsonLdMapper, CONTROL_SCOPE));
+        registerVersionInfo(getClass().getClassLoader());
     }
 
-    @Provider(isDefault = true)
-    public ControlClientAuthenticationProvider controlClientAuthenticationProvider() {
-        return Collections::emptyMap;
+    private void registerVersionInfo(ClassLoader resourceClassLoader) {
+        try (var versionContent = resourceClassLoader.getResourceAsStream(API_VERSION_JSON_FILE)) {
+            if (versionContent == null) {
+                throw new EdcException("Version file not found or not readable.");
+            }
+            var content = typeManager.getMapper().readValue(versionContent, VersionRecord.class);
+            apiVersionService.addRecord(ApiContext.CONTROL, content);
+        } catch (IOException e) {
+            throw new EdcException(e);
+        }
     }
 
     private ControlApiUrl controlApiUrl(ServiceExtensionContext context, WebServiceConfiguration config) {

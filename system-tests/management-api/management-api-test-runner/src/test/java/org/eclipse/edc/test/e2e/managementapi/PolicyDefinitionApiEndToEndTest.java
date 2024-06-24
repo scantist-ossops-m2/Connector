@@ -19,12 +19,10 @@ import org.eclipse.edc.connector.controlplane.policy.spi.PolicyDefinition;
 import org.eclipse.edc.connector.controlplane.policy.spi.store.PolicyDefinitionStore;
 import org.eclipse.edc.junit.annotations.EndToEndTest;
 import org.eclipse.edc.junit.annotations.PostgresqlIntegrationTest;
-import org.eclipse.edc.junit.extensions.EdcRuntimeExtension;
 import org.eclipse.edc.policy.model.Policy;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -43,50 +41,15 @@ import static org.eclipse.edc.policy.model.OdrlNamespace.ODRL_SCHEMA;
 import static org.eclipse.edc.spi.constants.CoreConstants.EDC_NAMESPACE;
 import static org.eclipse.edc.spi.constants.CoreConstants.EDC_PREFIX;
 import static org.eclipse.edc.spi.query.Criterion.criterion;
-import static org.eclipse.edc.sql.testfixtures.PostgresqlEndToEndInstance.createDatabase;
-import static org.eclipse.edc.test.e2e.managementapi.Runtimes.inMemoryRuntime;
-import static org.eclipse.edc.test.e2e.managementapi.Runtimes.postgresRuntime;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.is;
 
 public class PolicyDefinitionApiEndToEndTest {
 
-    @Nested
-    @EndToEndTest
-    class InMemory extends Tests {
-
-        @RegisterExtension
-        public static final EdcRuntimeExtension RUNTIME = inMemoryRuntime();
-
-        InMemory() {
-            super(RUNTIME);
-        }
-
-    }
-
-    @Nested
-    @PostgresqlIntegrationTest
-    class Postgres extends Tests {
-
-        @RegisterExtension
-        static final BeforeAllCallback CREATE_DATABASE = context -> createDatabase("runtime");
-
-        @RegisterExtension
-        public static final EdcRuntimeExtension RUNTIME = postgresRuntime();
-
-        Postgres() {
-            super(RUNTIME);
-        }
-    }
-
-    abstract static class Tests extends ManagementApiEndToEndTestBase {
-
-        Tests(EdcRuntimeExtension runtime) {
-            super(runtime);
-        }
+    abstract static class Tests {
 
         @Test
-        void shouldStorePolicyDefinition() {
+        void shouldStorePolicyDefinition(ManagementEndToEndTestContext context) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -95,16 +58,16 @@ public class PolicyDefinitionApiEndToEndTest {
                     .add("policy", sampleOdrlPolicy())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .contentType(JSON)
                     .extract().jsonPath().getString(ID);
 
-            baseRequest()
-                    .get("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .get("/v3/policydefinitions/" + id)
                     .then()
                     .log().ifValidationFails()
                     .statusCode(200)
@@ -118,7 +81,7 @@ public class PolicyDefinitionApiEndToEndTest {
         }
 
         @Test
-        void shouldStorePolicyDefinitionWithPrivateProperties() {
+        void shouldStorePolicyDefinitionWithPrivateProperties(ManagementEndToEndTestContext context, PolicyDefinitionStore store) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -130,15 +93,15 @@ public class PolicyDefinitionApiEndToEndTest {
                             .build())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .contentType(JSON)
                     .extract().jsonPath().getString(ID);
 
-            var result = store().findById(id);
+            var result = store.findById(id);
 
             assertThat(result).isNotNull()
                     .extracting(PolicyDefinition::getPolicy).isNotNull()
@@ -148,8 +111,8 @@ public class PolicyDefinitionApiEndToEndTest {
             assertThat(result).isNotNull()
                     .extracting(PolicyDefinition::getPrivateProperties).isEqualTo(privateProp);
 
-            baseRequest()
-                    .get("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .get("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(200)
                     .contentType(JSON)
@@ -161,7 +124,7 @@ public class PolicyDefinitionApiEndToEndTest {
         }
 
         @Test
-        void queryPolicyDefinitionWithSimplePrivateProperties() {
+        void queryPolicyDefinitionWithSimplePrivateProperties(ManagementEndToEndTestContext context) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -173,38 +136,38 @@ public class PolicyDefinitionApiEndToEndTest {
                             .build())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .contentType(JSON)
                     .extract().jsonPath().getString(ID);
 
-            var matchingQuery = query(
+            var matchingQuery = context.query(
                     criterion("id", "=", id),
                     criterion("privateProperties.'https://w3id.org/edc/v0.0.1/ns/newKey'.@id", "=", "newValue")
             );
 
-            baseRequest()
+            context.baseRequest()
                     .body(matchingQuery)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions/request")
+                    .post("/v3/policydefinitions/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
                     .body("size()", is(1));
 
 
-            var nonMatchingQuery = query(
+            var nonMatchingQuery = context.query(
                     criterion("id", "=", id),
                     criterion("privateProperties.'https://w3id.org/edc/v0.0.1/ns/newKey'.@id", "=", "somethingElse")
             );
 
-            baseRequest()
+            context.baseRequest()
                     .body(nonMatchingQuery)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions/request")
+                    .post("/v3/policydefinitions/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
@@ -212,7 +175,7 @@ public class PolicyDefinitionApiEndToEndTest {
         }
 
         @Test
-        void shouldUpdate() {
+        void shouldUpdate(ManagementEndToEndTestContext context, PolicyDefinitionStore store) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -221,38 +184,38 @@ public class PolicyDefinitionApiEndToEndTest {
                     .add("policy", sampleOdrlPolicy())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .statusCode(200)
                     .extract().jsonPath().getString(ID);
 
-            baseRequest()
+            context.baseRequest()
                     .contentType(JSON)
-                    .get("/v2/policydefinitions/" + id)
+                    .get("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(200);
 
-            baseRequest()
+            context.baseRequest()
                     .contentType(JSON)
                     .body(createObjectBuilder(requestBody)
                             .add(ID, id)
                             .add("privateProperties", createObjectBuilder().add("privateProperty", "value"))
                             .build())
-                    .put("/v2/policydefinitions/" + id)
+                    .put("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(204);
 
-            assertThat(store().findById(id))
+            assertThat(store.findById(id))
                     .extracting(PolicyDefinition::getPrivateProperties)
                     .asInstanceOf(MAP)
                     .isNotEmpty();
         }
 
         @Test
-        void shouldDelete() {
+        void shouldDelete(ManagementEndToEndTestContext context) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -261,28 +224,27 @@ public class PolicyDefinitionApiEndToEndTest {
                     .add("policy", sampleOdrlPolicy())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .statusCode(200)
                     .extract().jsonPath().getString(ID);
 
-            baseRequest()
-                    .delete("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .delete("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(204);
 
-            baseRequest()
-                    .get("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .get("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(404);
         }
 
-
         @Test
-        void shouldDeleteWithProperties() {
+        void shouldDeleteWithProperties(ManagementEndToEndTestContext context) {
             var requestBody = createObjectBuilder()
                     .add(CONTEXT, createObjectBuilder()
                             .add(VOCAB, EDC_NAMESPACE)
@@ -294,21 +256,21 @@ public class PolicyDefinitionApiEndToEndTest {
                             .build())
                     .build();
 
-            var id = baseRequest()
+            var id = context.baseRequest()
                     .body(requestBody)
                     .contentType(JSON)
-                    .post("/v2/policydefinitions")
+                    .post("/v3/policydefinitions")
                     .then()
                     .statusCode(200)
                     .extract().jsonPath().getString(ID);
 
-            baseRequest()
-                    .delete("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .delete("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(204);
 
-            baseRequest()
-                    .get("/v2/policydefinitions/" + id)
+            context.baseRequest()
+                    .get("/v3/policydefinitions/" + id)
                     .then()
                     .statusCode(404);
         }
@@ -347,10 +309,16 @@ public class PolicyDefinitionApiEndToEndTest {
                     .build();
         }
 
-        private PolicyDefinitionStore store() {
-            return runtime.getContext().getService(PolicyDefinitionStore.class);
-        }
-
     }
+
+    @Nested
+    @EndToEndTest
+    @ExtendWith(ManagementEndToEndExtension.InMemory.class)
+    class InMemory extends Tests { }
+
+    @Nested
+    @PostgresqlIntegrationTest
+    @ExtendWith(ManagementEndToEndExtension.Postgres.class)
+    class Postgres extends Tests { }
 
 }

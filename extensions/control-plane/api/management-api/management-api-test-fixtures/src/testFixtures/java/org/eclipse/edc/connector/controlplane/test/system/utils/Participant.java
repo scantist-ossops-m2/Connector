@@ -139,7 +139,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(requestBody)
                 .when()
-                .post("/v2/policydefinitions")
+                .post("/v3/policydefinitions")
                 .then()
                 .log().ifError()
                 .statusCode(200)
@@ -176,7 +176,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(requestBody)
                 .when()
-                .post("/v2/contractdefinitions")
+                .post("/v3/contractdefinitions")
                 .then()
                 .statusCode(200)
                 .extract().jsonPath().getString(ID);
@@ -216,7 +216,7 @@ public class Participant {
                     .contentType(JSON)
                     .when()
                     .body(requestBodyBuilder.build())
-                    .post("/v2/catalog/request")
+                    .post("/v3/catalog/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
@@ -258,7 +258,7 @@ public class Participant {
                     .contentType(JSON)
                     .when()
                     .body(requestBody)
-                    .post("/v2/catalog/dataset/request")
+                    .post("/v3/catalog/dataset/request")
                     .then()
                     .log().ifError()
                     .statusCode(200)
@@ -308,7 +308,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(requestBody)
                 .when()
-                .post("/v2/contractnegotiations")
+                .post("/v3/contractnegotiations")
                 .then()
                 .log().ifError()
                 .statusCode(200)
@@ -339,14 +339,13 @@ public class Participant {
      *
      * @param provider            data provider
      * @param contractAgreementId contract agreement id
-     * @param assetId             asset id
      * @param privateProperties   private properties
      * @param destination         data destination address
      * @param transferType        type of transfer
      * @return id of the transfer process.
      */
-    public String initiateTransfer(Participant provider, String contractAgreementId, String assetId, JsonObject privateProperties, JsonObject destination, String transferType) {
-        return initiateTransfer(provider, contractAgreementId, assetId, privateProperties, destination, transferType, null);
+    public String initiateTransfer(Participant provider, String contractAgreementId, JsonObject privateProperties, JsonObject destination, String transferType) {
+        return initiateTransfer(provider, contractAgreementId, privateProperties, destination, transferType, null);
     }
 
     /**
@@ -354,19 +353,17 @@ public class Participant {
      *
      * @param provider            data provider
      * @param contractAgreementId contract agreement id
-     * @param assetId             asset id
      * @param privateProperties   private properties
      * @param destination         data destination address
      * @param transferType        type of transfer
      * @param callbacks           callbacks for the transfer process
      * @return id of the transfer process.
      */
-    public String initiateTransfer(Participant provider, String contractAgreementId, String assetId, JsonObject privateProperties, JsonObject destination, String transferType, JsonArray callbacks) {
+    public String initiateTransfer(Participant provider, String contractAgreementId, JsonObject privateProperties, JsonObject destination, String transferType, JsonArray callbacks) {
         var requestBodyBuilder = createObjectBuilder()
                 .add(CONTEXT, createObjectBuilder().add(VOCAB, EDC_NAMESPACE))
                 .add(TYPE, "TransferRequest")
                 .add("protocol", protocol)
-                .add("assetId", assetId)
                 .add("contractId", contractAgreementId)
                 .add("connectorId", provider.id)
                 .add("counterPartyAddress", provider.protocolEndpoint.url.toString());
@@ -393,7 +390,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(requestBody)
                 .when()
-                .post("/v2/transferprocesses")
+                .post("/v3/transferprocesses")
                 .then()
                 .log().ifError()
                 .statusCode(200)
@@ -424,7 +421,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(query)
                 .when()
-                .post("/v2/transferprocesses/request")
+                .post("/v3/transferprocesses/request")
                 .then()
                 .statusCode(200)
                 .extract()
@@ -500,7 +497,7 @@ public class Participant {
         return managementEndpoint.baseRequest()
                 .contentType(JSON)
                 .when()
-                .get("/v2/transferprocesses/{id}/state", id)
+                .get("/v3/transferprocesses/{id}/state", id)
                 .then()
                 .statusCode(200)
                 .extract().body().jsonPath().getString("state");
@@ -521,7 +518,7 @@ public class Participant {
                 .contentType(JSON)
                 .body(requestBodyBuilder.build())
                 .when()
-                .post("/v2/transferprocesses/{id}/suspend", id)
+                .post("/v3/transferprocesses/{id}/suspend", id)
                 .then()
                 .log().ifError()
                 .statusCode(204);
@@ -536,7 +533,7 @@ public class Participant {
         managementEndpoint.baseRequest()
                 .contentType(JSON)
                 .when()
-                .post("/v2/transferprocesses/{id}/resume", id)
+                .post("/v3/transferprocesses/{id}/resume", id)
                 .then()
                 .log().ifError()
                 .statusCode(204);
@@ -556,7 +553,7 @@ public class Participant {
         return managementEndpoint.baseRequest()
                 .contentType(JSON)
                 .when()
-                .get("/v2/contractnegotiations/{id}", negotiationId)
+                .get("/v3/contractnegotiations/{id}", negotiationId)
                 .then()
                 .statusCode(200)
                 .extract().body().jsonPath()
@@ -731,7 +728,7 @@ public class Participant {
         public String execute() {
             var offer = getOfferForAsset(counterPart, assetId);
             var contractAgreementId = negotiateContract(counterPart, offer);
-            var transferProcessId = initiateTransfer(counterPart, contractAgreementId, assetId, privateProperties, destination, transferType, callbacks);
+            var transferProcessId = initiateTransfer(counterPart, contractAgreementId, privateProperties, destination, transferType, callbacks);
             assertThat(transferProcessId).isNotNull();
             return transferProcessId;
         }

@@ -15,6 +15,8 @@
 
 package org.eclipse.edc.connector.controlplane.services.transferprocess;
 
+import org.eclipse.edc.connector.controlplane.contract.spi.negotiation.store.ContractNegotiationStore;
+import org.eclipse.edc.connector.controlplane.contract.spi.types.agreement.ContractAgreement;
 import org.eclipse.edc.connector.controlplane.services.spi.transferprocess.TransferProcessService;
 import org.eclipse.edc.connector.controlplane.transfer.spi.TransferProcessManager;
 import org.eclipse.edc.connector.controlplane.transfer.spi.flow.FlowTypeExtractor;
@@ -26,6 +28,7 @@ import org.eclipse.edc.connector.controlplane.transfer.spi.types.command.Deprovi
 import org.eclipse.edc.connector.controlplane.transfer.spi.types.command.ResumeTransferCommand;
 import org.eclipse.edc.connector.controlplane.transfer.spi.types.command.SuspendTransferCommand;
 import org.eclipse.edc.connector.controlplane.transfer.spi.types.command.TerminateTransferCommand;
+import org.eclipse.edc.policy.model.Policy;
 import org.eclipse.edc.spi.command.CommandHandlerRegistry;
 import org.eclipse.edc.spi.command.CommandResult;
 import org.eclipse.edc.spi.query.Criterion;
@@ -77,9 +80,10 @@ class TransferProcessServiceImplTest {
     private final DataAddressValidatorRegistry dataAddressValidator = mock();
     private final CommandHandlerRegistry commandHandlerRegistry = mock();
     private final FlowTypeExtractor flowTypeExtractor = mock();
+    private final ContractNegotiationStore contractNegotiationStore = mock();
 
     private final TransferProcessService service = new TransferProcessServiceImpl(store, manager, transactionContext,
-            dataAddressValidator, commandHandlerRegistry, flowTypeExtractor);
+            dataAddressValidator, commandHandlerRegistry, flowTypeExtractor, contractNegotiationStore);
 
     @Test
     void findById_whenFound() {
@@ -144,6 +148,8 @@ class TransferProcessServiceImplTest {
         void shouldInitiateTransfer() {
             var transferRequest = transferRequest();
             var transferProcess = transferProcess();
+            when(contractNegotiationStore.findContractAgreement(transferRequest.getContractId()))
+                    .thenReturn(createContractAgreement(transferProcess.getContractId(), "assetId"));
             when(flowTypeExtractor.extract(any())).thenReturn(StatusResult.success(FlowType.PUSH));
             when(dataAddressValidator.validateDestination(any())).thenReturn(ValidationResult.success());
             when(manager.initiateConsumerRequest(transferRequest)).thenReturn(StatusResult.success(transferProcess));
@@ -155,7 +161,7 @@ class TransferProcessServiceImplTest {
         }
 
         @Test
-        void shouldFail_whenDestinationIsNotValid() {
+        void shouldFail_whenContractAgreementNotFound() {
             when(flowTypeExtractor.extract(any())).thenReturn(StatusResult.success(FlowType.PUSH));
             when(dataAddressValidator.validateDestination(any())).thenReturn(ValidationResult.failure(violation("invalid data address", "path")));
 
@@ -164,19 +170,40 @@ class TransferProcessServiceImplTest {
             assertThat(result).isFailed()
                     .extracting(ServiceFailure::getReason)
                     .isEqualTo(BAD_REQUEST);
+            assertThat(result.getFailureMessages()).containsExactly("Contract agreement with id %s not found".formatted(transferRequest().getContractId()));
+            verifyNoInteractions(manager);
+        }
+
+        @Test
+        void shouldFail_whenDestinationIsNotValid() {
+            var transferRequest = transferRequest();
+            when(contractNegotiationStore.findContractAgreement(transferRequest.getContractId()))
+                    .thenReturn(createContractAgreement(transferRequest.getContractId(), "assetId"));
+            when(flowTypeExtractor.extract(any())).thenReturn(StatusResult.success(FlowType.PUSH));
+            when(dataAddressValidator.validateDestination(any())).thenReturn(ValidationResult.failure(violation("invalid data address", "path")));
+
+            var result = service.initiateTransfer(transferRequest);
+
+            assertThat(result).isFailed()
+                    .extracting(ServiceFailure::getReason)
+                    .isEqualTo(BAD_REQUEST);
+            assertThat(result.getFailureMessages()).containsExactly("invalid data address");
             verifyNoInteractions(manager);
         }
 
         @Test
         void shouldFail_whenDataDestinationNotPassedAndFlowTypeIsPush() {
-            when(flowTypeExtractor.extract(any())).thenReturn(StatusResult.success(FlowType.PUSH));
-            var request = TransferRequest.Builder.newInstance()
+            var transferRequest = TransferRequest.Builder.newInstance()
                     .transferType("any")
                     .build();
+            when(contractNegotiationStore.findContractAgreement(transferRequest.getContractId()))
+                    .thenReturn(createContractAgreement(transferRequest.getContractId(), "assetId"));
+            when(flowTypeExtractor.extract(any())).thenReturn(StatusResult.success(FlowType.PUSH));
 
-            var result = service.initiateTransfer(request);
+            var result = service.initiateTransfer(transferRequest);
 
             assertThat(result).isFailed().extracting(ServiceFailure::getReason).isEqualTo(BAD_REQUEST);
+            assertThat(result.getFailureMessages()).containsExactly("For PUSH transfers dataDestination must be defined");
             verifyNoInteractions(manager);
         }
     }
@@ -312,6 +339,16 @@ class TransferProcessServiceImplTest {
     private TransferRequest transferRequest() {
         return TransferRequest.Builder.newInstance()
                 .dataDestination(DataAddress.Builder.newInstance().type("type").build())
+                .build();
+    }
+
+    private ContractAgreement createContractAgreement(String agreementId, String assetId) {
+        return ContractAgreement.Builder.newInstance()
+                .id(agreementId)
+                .providerId(UUID.randomUUID().toString())
+                .consumerId(UUID.randomUUID().toString())
+                .assetId(assetId)
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 
